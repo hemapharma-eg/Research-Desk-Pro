@@ -1,0 +1,127 @@
+import { useState } from 'react';
+import './styles/design-system.css';
+import { Dashboard } from './modules/dashboard/Dashboard';
+import { ReferenceManager } from './modules/reference-manager/ReferenceManager';
+import { DocumentEditor } from './modules/document-editor/DocumentEditor';
+import { GraphingStudio } from './modules/graphing-studio/GraphingStudio';
+import { PowerAnalysis } from './modules/power-analysis/PowerAnalysis';
+import { SystematicReview } from './modules/systematic-review/SystematicReview';
+import { ProjectProvider, useProject } from './context/ProjectContext';
+
+function AppContent() {
+  const [activeModule, setActiveModule] = useState('dashboard');
+  const { currentProject } = useProject();
+
+  const renderModuleContent = () => {
+    switch (activeModule) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'reference-manager':
+        return <ReferenceManager />;
+      case 'document-editor':
+        return <DocumentEditor />;
+      case 'graphing-studio':
+        return <GraphingStudio />;
+      case 'power-analysis':
+        return <PowerAnalysis />;
+      case 'systematic-review':
+        return <SystematicReview />;
+      default:
+        return (
+          <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-lg)' }}>
+            Module content for <b>{activeModule}</b> will load here.
+          </p>
+        );
+    }
+  };
+
+  return (
+    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--color-bg-app)' }}>
+      {/* Mac-native invisible drag region for the hiddenInset titlebar */}
+      <div className="titlebar drarg-region" style={{ height: 'var(--titlebar-height)', width: '100%', flexShrink: 0 }}></div>
+
+      <div className="app-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Sidebar */}
+        <aside className="sidebar no-drag-region" style={{ width: 'var(--sidebar-width)', backgroundColor: 'var(--color-bg-sidebar)', borderRight: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', padding: 'var(--space-4)' }}>
+          <div className="branding" style={{ marginBottom: 'var(--space-6)', paddingLeft: 'var(--space-2)' }}>
+            <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-text-primary)' }}>Research Desk<span style={{ color: 'var(--color-accent-primary)' }}>.</span></h2>
+            {currentProject && (
+              <p style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', wordBreak: 'break-all' }}>
+                {currentProject.split('/').pop()?.split('\\').pop() || 'Untitled Project'}
+              </p>
+            )}
+          </div>
+          
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+            {['Dashboard', 'Reference Manager', 'Document Editor', 'Graphing Studio', 'Power Analysis', 'Systematic Review'].map((item) => {
+              const id = item.toLowerCase().replace(' ', '-');
+              const isActive = activeModule === id;
+              return (
+                <button 
+                  key={id}
+                  onClick={() => setActiveModule(id)}
+                  style={{
+                    textAlign: 'left',
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    color: isActive ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
+                    backgroundColor: isActive ? 'rgba(41, 98, 255, 0.08)' : 'transparent',
+                    fontWeight: isActive ? 'var(--font-weight-medium)' : 'var(--font-weight-regular)',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+                    if (!isActive) e.currentTarget.style.color = 'var(--color-text-primary)';
+                  }}
+                  onMouseOut={(e) => {
+                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                    if (!isActive) e.currentTarget.style.color = 'var(--color-text-secondary)';
+                  }}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="main-content no-drag-region" style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)', overflowY: 'auto' }}>
+          <header style={{ marginBottom: 'var(--space-5)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}>
+                  {activeModule.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </h1>
+                <p style={{ marginTop: 'var(--space-1)', color: 'var(--color-text-secondary)' }}>Welcome to your workspace.</p>
+              </div>
+            </div>
+          </header>
+          
+          <div className="module-content" style={{ 
+            backgroundColor: 'var(--color-bg-surface)', 
+            borderRadius: 'var(--radius-lg)', 
+            border: '1px solid var(--color-border-light)',
+            boxShadow: 'var(--shadow-sm)',
+            minHeight: '400px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {renderModuleContent()}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ProjectProvider>
+      <AppContent />
+    </ProjectProvider>
+  );
+}
+
+export default App
