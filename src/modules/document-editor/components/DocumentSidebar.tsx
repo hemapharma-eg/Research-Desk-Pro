@@ -54,7 +54,7 @@ export function DocumentSidebar({ editor }: DocumentSidebarProps) {
   return (
     <div style={{
       width: '250px',
-      borderLeft: '1px solid var(--color-border-light)',
+      borderRight: '1px solid var(--color-border-light)',
       backgroundColor: 'var(--color-bg-sidebar)',
       padding: 'var(--space-4)',
       overflowY: 'auto',

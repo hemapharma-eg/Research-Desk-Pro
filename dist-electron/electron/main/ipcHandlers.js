@@ -12,6 +12,29 @@ ipcMain.handle('dialog:openDirectory', async (event) => {
   return filePaths[0];
 });
 
+const fs = require('node:fs');
+const path = require('node:path');
+
+ipcMain.handle('dialog:openImage', async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'Images', extensions: ['jpg', 'png', 'gif', 'jpeg', 'svg', 'webp'] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) { return null; }
+  
+  try {
+    const ext = path.extname(filePaths[0]).toLowerCase().substring(1);
+    const mimeType = ext === 'svg' ? 'image/svg+xml' : (ext === 'jpg' ? 'image/jpeg' : `image/${ext}`);
+    const base64str = fs.readFileSync(filePaths[0], { encoding: 'base64' });
+    return `data:${mimeType};base64,${base64str}`;
+  } catch (err) {
+    console.error("Failed to read image file", err);
+    return null;
+  }
+});
+
 ipcMain.handle('project:createOrOpen', async (event, projectPath) => {
   return dbManager.initDatabase(projectPath);
 });

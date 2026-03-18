@@ -35,15 +35,18 @@ export const CaptionNode = Node.create({
     ];
   },
 
-  renderHTML({ HTMLAttributes }) {
+  renderHTML({ node, HTMLAttributes }) {
+    const labelType = node.attrs.labelType || 'Figure';
+    const number = node.attrs.number || 1;
+    
     return [
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-type': 'caption',
-        style: 'text-align: center; color: var(--color-text-secondary); font-size: var(--font-size-sm); margin-top: var(--space-2); margin-bottom: var(--space-4); font-style: italic;',
+        'data-label': `${labelType} ${number}: `,
+        class: 'tiptap-caption',
       }),
-      ['strong', {}, `${HTMLAttributes.labelType} ${HTMLAttributes.number}: `],
-      ['span', 0], // The hole for inline content
+      0, // Directly output the content hole without strong/span wrappers
     ];
   },
 

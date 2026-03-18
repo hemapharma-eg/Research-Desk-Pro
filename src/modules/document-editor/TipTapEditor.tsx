@@ -1,7 +1,14 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect, useState } from 'react';
+import { DocumentPagination } from './extensions/DocumentPagination';
+import { CommentMark } from './extensions/CommentMark';
+import { TrackChanges, Insertion, Deletion } from './extensions/TrackChanges';
+import { TrackChangesSidebar } from './components/TrackChangesSidebar';
+import { CommentSidebar, type CommentThread } from './components/CommentSidebar';
+import { useEffect, useState, useRef } from 'react';
 import Underline from '@tiptap/extension-underline';
+import Superscript from '@tiptap/extension-superscript';
+import Subscript from '@tiptap/extension-subscript';
 import TextAlign from '@tiptap/extension-text-align';
 import CharacterCount from '@tiptap/extension-character-count';
 import { ResizableImageNode } from './extensions/ResizableImageNode';
@@ -31,6 +38,7 @@ import { DocumentSidebar } from './components/DocumentSidebar';
 import { SearchAndReplace } from './extensions/SearchAndReplace';
 import { IndexGeneratorNode } from './extensions/IndexGeneratorNode';
 import { FindReplacePanel } from './components/FindReplacePanel';
+import { PaginationPanel } from './components/PaginationPanel';
 import { AcademicTemplates } from './templates';
 import './TipTapStyles.css';
 
@@ -43,11 +51,41 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showFootnotePrompt, setShowFootnotePrompt] = useState(false);
   const [showEndnotePrompt, setShowEndnotePrompt] = useState(false);
+  const [showPaginationPanel, setShowPaginationPanel] = useState(false);
+  const [showOutline, setShowOutline] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [showTrackChanges, setShowTrackChanges] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
   const [noteText, setNoteText] = useState('');
+  
+  const [pageSettings, setPageSettings] = useState({
+    headerText: '',
+    footerText: '',
+    pageNumberPosition: 'none'
+  });
+  const pageSettingsRef = useRef(pageSettings);
+  pageSettingsRef.current = pageSettings;
+
+  const [comments, setComments] = useState<CommentThread[]>([]);
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
+
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      DocumentPagination,
+      CommentMark,
+      TrackChanges,
+      Insertion,
+      Deletion,
+      PageBreak,
+      StarterKit.configure({
+        document: false, // We're using our custom DocumentPagination instead
+      }),
       Underline,
+      Superscript,
+      Subscript,
       TextAlign.configure({ types: ['heading', 'paragraph', 'image'] }),
       CharacterCount,
       ResizableImageNode,
@@ -62,17 +100,17 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
       FontSize,
       LineHeight,
       Indent,
-      PageBreak,
+      PageBreak, // Moved PageBreak here
       MathNode,
       CaptionNode,
       CaptionNumberingPlugin,
       FootnoteNode,
       EndnoteNode,
       IndexGeneratorNode,
-      SearchAndReplace,
       CrossReferenceNode.configure({
         suggestion: crossRefSuggestion,
       }),
+      SearchAndReplace,
       CitationNode.configure({
         HTMLAttributes: {
           class: 'citation-badge',
@@ -82,16 +120,149 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
     ],
     content,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = editor.getHTML();
+      const settingsStr = JSON.stringify(pageSettingsRef.current).replace(/"/g, '&quot;');
+      const commentsStr = JSON.stringify(commentsRef.current).replace(/"/g, '&quot;');
+      onChange(html + `<div id="page-settings" data-settings="${settingsStr}"></div><div id="comment-settings" data-comments="${commentsStr}"></div>`);
     },
+    onSelectionUpdate: ({ editor }) => {
+      // Find comment ID in current selection
+      const isActive = editor.isActive('comment');
+      if (isActive) {
+        const attrs = editor.getAttributes('comment');
+        if (attrs.commentId) {
+          setActiveCommentId(attrs.commentId);
+          setShowComments(true);
+          return;
+        }
+      }
+      setActiveCommentId(null);
+    }
   });
 
   // Sync external content changes into the editor when loading a new document
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+    if (editor && content) {
+      // Extract page settings
+      const matchSettings = content.match(/<div id="page-settings" data-settings="([^"]+)"><\/div>/);
+      // Extract comment settings
+      const matchComments = content.match(/<div id="comment-settings" data-comments="([^"]+)"><\/div>/);
+      
+      let cleanContent = content;
+      
+      if (matchSettings) {
+        try {
+          const parsed = JSON.parse(matchSettings[1].replace(/&quot;/g, '"'));
+          setPageSettings(parsed);
+          pageSettingsRef.current = parsed;
+          cleanContent = cleanContent.replace(matchSettings[0], '');
+        } catch(e) {}
+      }
+
+      if (matchComments) {
+        try {
+          const parsedStr = matchComments[1].replace(/&quot;/g, '"')
+          const parsed = JSON.parse(parsedStr);
+          setComments(parsed);
+          commentsRef.current = parsed;
+          cleanContent = cleanContent.replace(matchComments[0], '');
+        } catch(e) {}
+      }
+      
+      if (cleanContent !== editor.getHTML()) {
+        editor.commands.setContent(cleanContent);
+      }
     }
   }, [content, editor]);
+
+  const saveToHTMLWithMeta = (opts: { newSettings?: any, newComments?: CommentThread[] } = {}) => {
+    if (!editor) return;
+    const html = editor.getHTML();
+    const settings = opts.newSettings || pageSettings;
+    const comms = opts.newComments || comments;
+    const settingsStr = JSON.stringify(settings).replace(/"/g, '&quot;');
+    const commentsStr = JSON.stringify(comms).replace(/"/g, '&quot;');
+    onChange(html + `<div id="page-settings" data-settings="${settingsStr}"></div><div id="comment-settings" data-comments="${commentsStr}"></div>`);
+  };
+
+  const handlePageSettingsChange = (key: string, value: string) => {
+    const newSettings = { ...pageSettings, [key]: value };
+    setPageSettings(newSettings);
+    saveToHTMLWithMeta({ newSettings });
+  };
+
+  const handleAddComment = () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      alert("Please select some text to attach a comment to.");
+      return;
+    }
+    const selectedText = editor.state.doc.textBetween(from, to, ' ').substring(0, 100);
+    const id = Math.random().toString(36).substr(2, 9);
+    editor.chain().focus().setComment(id).run();
+
+    const newComments = [...comments, {
+      id,
+      selectedText,
+      author: 'Current User', // Placeholder for actual user system
+      text: '',
+      createdAt: new Date().toISOString(),
+      replies: [],
+      resolved: false
+    }];
+    setComments(newComments);
+    setActiveCommentId(id);
+    setShowComments(true);
+    saveToHTMLWithMeta({ newComments });
+  };
+
+  const setCommentText = (id: string, text: string) => {
+    const newComments = comments.map(c => c.id === id ? { ...c, text } : c);
+    setComments(newComments);
+    saveToHTMLWithMeta({ newComments });
+  };
+
+  const addCommentReply = (id: string, text: string) => {
+    const newComments = comments.map(c => c.id === id ? {
+      ...c,
+      replies: [...c.replies, { id: Math.random().toString(36).substr(2, 9), author: 'Current User', text, createdAt: new Date().toISOString() }]
+    } : c);
+    setComments(newComments);
+    saveToHTMLWithMeta({ newComments });
+  };
+
+  const resolveComment = (id: string) => {
+    const newComments = comments.map(c => c.id === id ? { ...c, resolved: true } : c);
+    setComments(newComments);
+    saveToHTMLWithMeta({ newComments });
+    if (editor) editor.chain().focus().unsetComment(id).run();
+  };
+
+  const deleteComment = (id: string) => {
+    const newComments = comments.filter(c => c.id !== id);
+    setComments(newComments);
+    saveToHTMLWithMeta({ newComments });
+    if (editor) editor.chain().focus().unsetComment(id).run();
+  };
+
+  const highlightCommentInEditor = (id: string) => {
+    setActiveCommentId(id);
+    // Add visual feedback to active comment via CSS
+    if (!editor) return;
+    const tiptapContainer = document.querySelector('.tiptap');
+    if (!tiptapContainer) return;
+    
+    // Clear old active classes
+    tiptapContainer.querySelectorAll('.comment-highlight').forEach(el => el.classList.remove('active-comment'));
+    
+    // Add active class to new
+    const elements = tiptapContainer.querySelectorAll(`.comment-highlight[data-comment-id="${id}"]`);
+    elements.forEach(el => el.classList.add('active-comment'));
+    if (elements.length > 0) {
+      elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,7 +281,7 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 0 }}>
       <div 
         className="editor-toolbar" 
         style={{ 
@@ -120,7 +291,8 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
           borderBottom: '1px solid var(--color-border-light)',
           marginBottom: 'var(--space-4)',
           flexWrap: 'wrap',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexShrink: 0
         }}
       >
         {/* Font Family */}
@@ -211,6 +383,40 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
           style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: editor.isActive('underline') ? 'var(--color-bg-hover)' : 'transparent', textDecoration: 'underline' }}
         >
           U
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleSuperscript().run()}
+          className={editor.isActive('superscript') ? 'active' : ''}
+          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: editor.isActive('superscript') ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="Superscript"
+        >
+          X²
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleSubscript().run()}
+          className={editor.isActive('subscript') ? 'active' : ''}
+          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: editor.isActive('subscript') ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="Subscript"
+        >
+          X₂
+        </button>
+        <div style={{ width: '1px', background: 'var(--color-border-light)', margin: '0 var(--space-2)' }}></div>
+        <button
+          onClick={() => {
+            setIsTracking(!isTracking);
+            editor.chain().focus().setTrackChanges(!isTracking).run();
+          }}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: isTracking ? '#e6ffed' : 'transparent', color: isTracking ? '#2e7d32' : 'inherit', fontWeight: 'bold' }}
+          title="Toggle Track Changes Mode"
+        >
+          {isTracking ? 'Tracking: ON' : 'Track Changes'}
+        </button>
+        <button
+          onClick={() => setShowTrackChanges(!showTrackChanges)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: showTrackChanges ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="Review Tracked Changes"
+        >
+          👀 Review Changes
         </button>
         <div style={{ width: '1px', background: 'var(--color-border-light)', margin: '0 var(--space-2)' }}></div>
         <select
@@ -435,15 +641,48 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
 
         <div style={{ width: '1px', background: 'var(--color-border-light)', margin: '0 var(--space-2)' }}></div>
         <button
+          onClick={handleAddComment}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'transparent' }}
+          title="Add Comment to Selection"
+        >
+          ➕ Add Comment
+        </button>
+        <button
+          onClick={() => setShowComments(!showComments)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: showComments ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="Toggle Comments Panel"
+        >
+          💬 Comments Panel
+        </button>
+        <div style={{ width: '1px', background: 'var(--color-border-light)', margin: '0 var(--space-2)' }}></div>
+        <button
+          onClick={() => setShowOutline(!showOutline)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: showOutline ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="Toggle Document Outline"
+        >
+          📑 Outline
+        </button>
+        <button
           onClick={() => setShowFindReplace(true)}
           style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: showFindReplace ? 'var(--color-bg-hover)' : 'transparent' }}
           title="Find and Replace (Cmd+F)"
         >
           🔍 Find
         </button>
+        <button
+          onClick={() => setShowPaginationPanel(!showPaginationPanel)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: showPaginationPanel ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="Header, Footer, and Page Numbers"
+        >
+          📄 Format Page
+        </button>
       </div>
 
-      <div style={{ position: 'relative', display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', display: 'flex', flex: 1, overflow: 'hidden', minWidth: 0 }}>
+        {showOutline && (
+          <DocumentSidebar editor={editor} />
+        )}
+        
         {showFindReplace && (
           <FindReplacePanel editor={editor} onClose={() => setShowFindReplace(false)} />
         )}
@@ -514,14 +753,58 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
           </div>
         )}
 
-        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 'var(--space-8)' }}>
-          <EditorContent editor={editor} className="tiptap-content-wrapper" />
-          <FootnoteList editorJson={editor.getJSON()} />
-          <EndnoteList editorJson={editor.getJSON()} />
-          <Bibliography editorJson={editor.getJSON()} />
+        {showPaginationPanel && (
+           <PaginationPanel settings={pageSettings} onChange={handlePageSettingsChange} onClose={() => setShowPaginationPanel(false)} />
+        )}
+
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 'var(--space-8)', display: 'flex', flexDirection: 'column', backgroundColor: '#e5e7eb' }}>
+          <div className="tiptap-page-container">
+            {(pageSettings.headerText || (pageSettings.pageNumberPosition !== 'none' && pageSettings.pageNumberPosition.includes('top'))) && (
+               <div style={{ 
+                  padding: '0 25.4mm 16px', color: 'var(--color-text-tertiary)', fontSize: '12px', 
+                  borderBottom: '1px dashed var(--color-border-light)', opacity: 0.6,
+                  display: 'flex', justifyContent: 'space-between', marginBottom: '16px'
+               }}>
+                   <span>{pageSettings.headerText}</span>
+                   {pageSettings.pageNumberPosition.includes('top') && <span>Page 1</span>}
+               </div>
+            )}
+            
+            <EditorContent editor={editor} className="tiptap-content-wrapper" style={{ flexGrow: 1 }} />
+            
+            <div style={{ marginTop: 'auto' }}>
+              <div style={{ padding: '0 25.4mm' }}>
+                 <FootnoteList editorJson={editor.getJSON()} />
+                 <EndnoteList editorJson={editor.getJSON()} />
+                 <Bibliography editorJson={editor.getJSON()} />
+              </div>
+              
+              {(pageSettings.footerText || (pageSettings.pageNumberPosition !== 'none' && pageSettings.pageNumberPosition.includes('bottom'))) && (
+                 <div style={{ 
+                    padding: '16px 25.4mm 0', color: 'var(--color-text-tertiary)', fontSize: '12px', 
+                    borderTop: '1px dashed var(--color-border-light)', opacity: 0.6, marginTop: '24px',
+                    display: 'flex', justifyContent: 'space-between'
+                 }}>
+                     <span>{pageSettings.footerText}</span>
+                     {pageSettings.pageNumberPosition.includes('bottom') && <span>Page {(editor.getHTML().match(/<hr data-type="page-break"/g) || []).length + 1}</span>}
+                 </div>
+              )}
+            </div>
+          </div>
         </div>
         
-        <DocumentSidebar editor={editor} />
+        {showComments && (
+          <CommentSidebar 
+            comments={comments} 
+            activeCommentId={activeCommentId}
+            onAddCommentText={setCommentText}
+            onAddReply={addCommentReply}
+            onResolve={resolveComment}
+            onDelete={deleteComment}
+            onSelectComment={highlightCommentInEditor}
+          />
+        )}
+        {showTrackChanges && (<TrackChangesSidebar editor={editor} onClose={() => setShowTrackChanges(false)} />)}
       </div>
 
       <div style={{ 

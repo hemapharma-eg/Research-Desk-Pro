@@ -192,7 +192,7 @@ export function DocumentEditor() {
       </div>
 
       {/* Editor Pane (Right) */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--color-bg-app)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--color-bg-app)', minWidth: 0, overflow: 'hidden' }}>
         {error && (
           <div style={{ margin: 'var(--space-3)', padding: 'var(--space-2)', backgroundColor: 'var(--color-bg-hover)', color: 'var(--color-danger)', borderRadius: 'var(--radius-md)' }}>
             {error}
@@ -208,7 +208,7 @@ export function DocumentEditor() {
             Select a document to edit, or create a new one.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: 'var(--space-4)', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: 'var(--space-4)', gap: 'var(--space-3)', minWidth: 0, overflow: 'hidden' }}>
             
             {/* Editor Toolbar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-3)', borderBottom: '1px solid var(--color-border-light)' }}>

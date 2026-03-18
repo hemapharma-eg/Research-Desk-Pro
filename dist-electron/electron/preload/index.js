@@ -4,6 +4,7 @@ const ipcRenderer = electron.ipcRenderer;
 
 contextBridge.exposeInMainWorld('api', {
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
+  openImageDialog: () => ipcRenderer.invoke('dialog:openImage'),
   createOrOpenProject: (path) => ipcRenderer.invoke('project:createOrOpen', path),
   closeProject: () => ipcRenderer.invoke('project:close'),
   getCurrentProject: () => ipcRenderer.invoke('project:getCurrent'),

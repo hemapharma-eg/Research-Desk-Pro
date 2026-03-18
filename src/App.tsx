@@ -86,7 +86,7 @@ function AppContent() {
         </aside>
 
         {/* Main Content Area */}
-        <main className="main-content no-drag-region" style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)', overflowY: 'auto' }}>
+        <main className="main-content no-drag-region" style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <header style={{ marginBottom: 'var(--space-5)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-4)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -103,10 +103,9 @@ function AppContent() {
             borderRadius: 'var(--radius-lg)', 
             border: '1px solid var(--color-border-light)',
             boxShadow: 'var(--shadow-sm)',
-            minHeight: '400px',
+            flex: 1,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            overflow: 'hidden'
           }}>
             {renderModuleContent()}
           </div>
