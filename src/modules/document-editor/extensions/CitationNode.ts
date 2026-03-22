@@ -1,7 +1,13 @@
 import Mention from '@tiptap/extension-mention';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { CitationComponent } from '../components/CitationComponent';
 
 export const CitationNode = Mention.extend({
   name: 'citation',
+
+  addNodeView() {
+    return ReactNodeViewRenderer(CitationComponent);
+  },
 
   addAttributes() {
     return {

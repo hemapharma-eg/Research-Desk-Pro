@@ -140,7 +140,7 @@ export function DocumentEditor() {
     <div style={{ display: 'flex', width: '100%', height: '100%', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
       
       {/* Sidebar List (Left) */}
-      <div style={{ width: '280px', flexShrink: 0, borderRight: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-sidebar)', display: 'flex', flexDirection: 'column' }}>
+      <div className="print-hidden" style={{ width: '280px', flexShrink: 0, borderRight: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-sidebar)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-medium)' }}>Documents</h3>
           <button 
@@ -211,7 +211,7 @@ export function DocumentEditor() {
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: 'var(--space-4)', gap: 'var(--space-3)', minWidth: 0, overflow: 'hidden' }}>
             
             {/* Editor Toolbar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-3)', borderBottom: '1px solid var(--color-border-light)' }}>
+            <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-3)', borderBottom: '1px solid var(--color-border-light)' }}>
               <input 
                 value={titleValue}
                 onChange={e => setTitleValue(e.target.value)}
@@ -250,6 +250,7 @@ export function DocumentEditor() {
             
             {/* Main Text Area */}
             <TipTapEditor 
+              documentTitle={titleValue}
               content={contentValue}
               onChange={(html) => setContentValue(html)}
             />

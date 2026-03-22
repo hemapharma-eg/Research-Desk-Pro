@@ -186,3 +186,53 @@
   text-decoration: line-through;
   text-decoration-color: #c62828;
 }
+
+/* --- Print & PDF Export Styles --- */
+@media print {
+  .print-hidden,
+  button,
+  select,
+  .tippy-box,
+  .track-changes-sidebar,
+  .outline-sidebar,
+  .comment-sidebar {
+    display: none !important;
+  }
+
+  /* Make containers fluid so pages print properly instead of cropping to screen height */
+  html, body, #root {
+    height: auto !important;
+    width: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force all overflowing containers to be visible to print all pages */
+  * {
+    overflow: visible !important;
+  }
+
+  div {
+    display: block !important;
+    height: auto !important;
+  }
+
+  /* Hide the grey dashed lines for page breaks in print */
+  .tiptap .page-break::before,
+  .page-break {
+    display: none !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  .tiptap-page-container {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 20px 0 !important;
+    border: none !important;
+    position: static !important;
+    page-break-inside: avoid;
+  }
+}

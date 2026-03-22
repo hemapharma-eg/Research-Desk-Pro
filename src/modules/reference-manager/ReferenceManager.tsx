@@ -7,6 +7,10 @@ export function ReferenceManager() {
   const [references, setReferences] = useState<Reference[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Search & Sort State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'year', direction: 'desc' });
 
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -103,26 +107,111 @@ export function ReferenceManager() {
     );
   }
 
+  // Filter and Sort Logic
+  const filteredReferences = references.filter(ref => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (ref.title && ref.title.toLowerCase().includes(q)) ||
+      (ref.authors && ref.authors.toLowerCase().includes(q)) ||
+      (ref.year && ref.year.toString().includes(q)) ||
+      (ref.journal && ref.journal.toLowerCase().includes(q))
+    );
+  });
+
+  const sortedReferences = [...filteredReferences].sort((a, b) => {
+    if (!sortConfig) return 0;
+    const { key, direction } = sortConfig;
+    let aVal = (a as any)[key] || '';
+    let bVal = (b as any)[key] || '';
+    
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      aVal = aVal.toLowerCase();
+      bVal = bVal.toLowerCase();
+    }
+    
+    if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const renderSortIndicator = (key: string) => {
+    if (sortConfig?.key === key) {
+      return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+    }
+    return '';
+  };
+
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-4)', height: '100%' }}>
       
       {/* Header Actions */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-semibold)' }}>References ({references.length})</h2>
-        <button 
-          onClick={() => handleOpenForm()}
-          style={{
-            padding: 'var(--space-2) var(--space-4)',
-            backgroundColor: 'var(--color-accent-primary)',
-            color: 'white',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: 'var(--font-weight-medium)',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-        >
-          + Add Reference
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+        <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-semibold)', margin: 0 }}>References ({filteredReferences.length}{searchQuery ? ` / ${references.length}` : ''})</h2>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flex: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', flex: 1, maxWidth: '300px' }}>
+            <span style={{ marginRight: '8px', color: 'var(--color-text-tertiary)', fontSize: '14px' }}>🔍</span>
+            <input 
+              type="text" 
+              value={searchQuery} 
+              onChange={e => setSearchQuery(e.target.value)} 
+              placeholder="Search references..." 
+              style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px', color: 'var(--color-text-primary)' }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}>✕</button>
+            )}
+          </div>
+          <button 
+            onClick={async () => {
+              try {
+                const result = await window.api.importReferencesFile();
+                if (result.success && result.count && result.count > 0) {
+                  loadReferences();
+                  alert(`Successfully imported ${result.count} references.`);
+                } else if (result.error) {
+                  setError(result.error);
+                }
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : 'Error importing references');
+              }
+            }}
+            style={{
+              padding: 'var(--space-2) var(--space-4)',
+              backgroundColor: 'var(--color-bg-hover)',
+              color: 'var(--color-text-primary)',
+              borderRadius: 'var(--radius-md)',
+              fontWeight: 'var(--font-weight-medium)',
+              border: '1px solid var(--color-border-strong)',
+              cursor: 'pointer'
+            }}
+            title="Import .ris or .bib files"
+          >
+            📥 Import File
+          </button>
+          <button 
+            onClick={() => handleOpenForm()}
+            style={{
+              padding: 'var(--space-2) var(--space-4)',
+              backgroundColor: 'var(--color-accent-primary)',
+              color: 'white',
+              borderRadius: 'var(--radius-md)',
+              fontWeight: 'var(--font-weight-medium)',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            + Add Reference
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -142,16 +231,16 @@ export function ReferenceManager() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                <th style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>Authors</th>
-                <th style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>Title</th>
-                <th style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>Year</th>
-                <th style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>Review Status</th>
-                <th style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)', width: '120px' }}>Actions</th>
+              <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-app)' }}>
+                <th onClick={() => handleSort('authors')} style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Authors{renderSortIndicator('authors')}</th>
+                <th onClick={() => handleSort('title')} style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Title{renderSortIndicator('title')}</th>
+                <th onClick={() => handleSort('year')} style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)', cursor: 'pointer', width: '80px' }}>Year{renderSortIndicator('year')}</th>
+                <th onClick={() => handleSort('review_status')} style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)', cursor: 'pointer', width: '140px' }}>Review Status{renderSortIndicator('review_status')}</th>
+                <th style={{ padding: 'var(--space-3)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)', width: '120px', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {references.map(ref => (
+              {sortedReferences.map(ref => (
                 <tr key={ref.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                   <td style={{ padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)' }}>{ref.authors}</td>
                   <td style={{ padding: 'var(--space-3)', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)' }}>

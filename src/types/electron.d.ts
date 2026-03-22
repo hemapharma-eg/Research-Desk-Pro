@@ -20,6 +20,12 @@ export interface Reference {
   review_status?: 'unreviewed' | 'included' | 'excluded' | string;
 }
 
+export interface CustomStyle {
+  id: string;
+  name: string;
+  xml_content: string;
+}
+
 export interface ElectronAPI {
   openDirectoryDialog: () => Promise<string | null>;
   createOrOpenProject: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>;
@@ -32,6 +38,10 @@ export interface ElectronAPI {
   updateReferenceStatus: (id: string, status: string) => Promise<{ success: boolean; data?: Reference; error?: string }>;
   deleteReference: (id: string) => Promise<{ success: boolean; error?: string }>;
   
+  importReferencesFile: () => Promise<{ success: boolean; count?: number; data?: Reference[]; canceled?: boolean; error?: string }>;
+  importStyleFile: () => Promise<{ success: boolean; data?: CustomStyle; canceled?: boolean; error?: string }>;
+  getCustomStyles: () => Promise<{ success: boolean; data?: CustomStyle[]; error?: string }>;
+
   fetchDOI: (doi: string) => Promise<{ success: boolean; data?: Partial<Reference>; error?: string }>;
 
   getDocuments: () => Promise<{ success: boolean; data?: DocMetadata[]; error?: string }>;
@@ -39,6 +49,7 @@ export interface ElectronAPI {
   createDocument: (title?: string) => Promise<{ success: boolean; data?: Document; error?: string }>;
   updateDocument: (id: string, updates: {title?: string, content?: string}) => Promise<{ success: boolean; data?: Document; error?: string }>;
   deleteDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
+  exportDocx: (html: string, title?: string) => Promise<{ success: boolean; filePath?: string; error?: string; canceled?: boolean }>;
 }
 
 declare global {

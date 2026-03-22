@@ -1,20 +1,36 @@
 import { useEffect, useState } from 'react';
 import type { JSONContent } from '@tiptap/react';
-import type { Reference } from '../../../types/electron.d';
+import { Cite } from '@citation-js/core';
+import { getCitationStyle, onCitationStyleChange } from '../../../utils/citationStyleStore';
 
 interface BibliographyProps {
   editorJson: JSONContent;
+  citationStyle?: string;
 }
 
-export function Bibliography({ editorJson }: BibliographyProps) {
-  const [citedRefs, setCitedRefs] = useState<Reference[]>([]);
+export function Bibliography({ editorJson, citationStyle = 'apa' }: BibliographyProps) {
+  const [htmlContent, setHtmlContent] = useState<string>('');
+  const [activeStyle, setActiveStyle] = useState(getCitationStyle() || citationStyle);
 
+  // Subscribe to global style changes
+  useEffect(() => {
+    const unsub = onCitationStyleChange((newStyle) => {
+      setActiveStyle(newStyle);
+    });
+    return unsub;
+  }, []);
+
+  // Also sync from prop
+  useEffect(() => {
+    if (citationStyle) setActiveStyle(citationStyle);
+  }, [citationStyle]);
   useEffect(() => {
     // 1. recursively find all citation nodes in the tiptap document JSON
     const extractCitationIds = (node: JSONContent): string[] => {
       let ids: string[] = [];
       if (node.type === 'citation' && node.attrs?.id) {
-        ids.push(node.attrs.id);
+        const nodeIds = node.attrs.id.split(',');
+        ids.push(...nodeIds);
       }
       if (node.content) {
         node.content.forEach(child => {
@@ -29,7 +45,7 @@ export function Bibliography({ editorJson }: BibliographyProps) {
     // 2. Load the full reference data for these IDs
     const loadBibliography = async () => {
       if (ids.length === 0) {
-        setCitedRefs([]);
+        setHtmlContent('');
         return;
       }
       
@@ -37,23 +53,32 @@ export function Bibliography({ editorJson }: BibliographyProps) {
       if (res.success && res.data) {
         // Filter local DB to only references that were cited
         const bibliography = res.data.filter(ref => ids.includes(ref.id));
-        setCitedRefs(bibliography);
+        
+        try {
+          const cslData = bibliography.map(ref => ref.raw_metadata ? JSON.parse(ref.raw_metadata) : null).filter(Boolean);
+          
+          if (cslData.length > 0) {
+            const cite = new Cite(cslData);
+            const html = cite.format('bibliography', {
+              format: 'html',
+              template: activeStyle,
+              lang: 'en-US'
+            });
+            setHtmlContent(html);
+          } else {
+            setHtmlContent('<p><em>References missing raw metadata.</em></p>');
+          }
+        } catch (err) {
+          console.error("Citation formatting error:", err);
+          setHtmlContent('<p><em>Error formatting bibliography.</em></p>');
+        }
       }
     };
 
     loadBibliography();
-  }, [editorJson]);
+  }, [editorJson, activeStyle]);
 
-  // Very basic APA-style formatting placeholder
-  const formatReference = (ref: Reference) => {
-    const authorStr = ref.authors ? ref.authors.split(',').map((a: string) => a.trim()).join(', ') : 'Unknown Author';
-    const yearStr = ref.year ? `(${ref.year})` : '(n.d.)';
-    const titleStr = ref.title ? `${ref.title}.` : '';
-    const journalStr = ref.journal ? ` *${ref.journal}*` : '';
-    return `${authorStr} ${yearStr}. ${titleStr}${journalStr}`;
-  };
-
-  if (citedRefs.length === 0) {
+  if (!htmlContent) {
     return null;
   }
 
@@ -63,16 +88,24 @@ export function Bibliography({ editorJson }: BibliographyProps) {
       paddingTop: 'var(--space-4)',
       borderTop: '1px solid var(--color-border-strong)',
       color: 'var(--color-text-primary)'
-    }}>
+    }} className="bibliography-container">
       <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 'var(--space-3)' }}>References</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        {citedRefs.map(ref => (
-          <div key={ref.id} style={{ paddingLeft: '2rem', textIndent: '-2rem' }}>
-            {/* Simple italic injection for Journal names */}
-            <span dangerouslySetInnerHTML={{ __html: formatReference(ref).replace(/\*(.*?)\*/g, '<i>$1</i>') }} />
-          </div>
-        ))}
-      </div>
+      <style>{`
+        .bibliography-container .csl-entry {
+          display: flex;
+          margin-bottom: 12px;
+          line-height: 1.5;
+        }
+        .bibliography-container .csl-left-margin {
+          margin-right: 12px;
+          min-width: 24px;
+          text-align: right;
+        }
+        .bibliography-container .csl-right-inline {
+          flex: 1;
+        }
+      `}</style>
+      <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </div>
   );
 }

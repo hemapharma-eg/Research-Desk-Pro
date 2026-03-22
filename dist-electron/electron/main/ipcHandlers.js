@@ -151,3 +151,31 @@ ipcMain.handle('document:delete', async (event, id) => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('document:exportDocx', async (event, html, defaultTitle = 'Document') => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export to DOCX',
+      defaultPath: `${defaultTitle}.docx`,
+      filters: [{ name: 'Word Document', extensions: ['docx'] }]
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    const HTMLtoDOCX = require('html-to-docx');
+    
+    // Ensure styles and proper formatting
+    // We wrap the html in a basic document structure to help parsing if needed, but html-to-docx is robust
+    const fileBuffer = await HTMLtoDOCX(html, null, {
+        table: { row: { cantSplit: true } },
+        footer: true,
+        pageNumber: true,
+    });
+
+    fs.writeFileSync(filePath, fileBuffer);
+    return { success: true, filePath };
+  } catch (error) {
+    console.error("Export DOCX Error:", error);
+    return { success: false, error: error.message };
+  }
+});

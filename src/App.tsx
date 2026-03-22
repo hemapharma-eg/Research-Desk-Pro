@@ -42,7 +42,7 @@ function AppContent() {
 
       <div className="app-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
-        <aside className="sidebar no-drag-region" style={{ width: 'var(--sidebar-width)', backgroundColor: 'var(--color-bg-sidebar)', borderRight: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', padding: 'var(--space-4)' }}>
+        <aside className="print-hidden sidebar no-drag-region" style={{ width: 'var(--sidebar-width)', backgroundColor: 'var(--color-bg-sidebar)', borderRight: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', padding: 'var(--space-4)' }}>
           <div className="branding" style={{ marginBottom: 'var(--space-6)', paddingLeft: 'var(--space-2)' }}>
             <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-text-primary)' }}>Research Desk<span style={{ color: 'var(--color-accent-primary)' }}>.</span></h2>
             {currentProject && (
@@ -87,7 +87,7 @@ function AppContent() {
 
         {/* Main Content Area */}
         <main className="main-content no-drag-region" style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <header style={{ marginBottom: 'var(--space-5)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-4)' }}>
+          <header className="print-hidden" style={{ marginBottom: 'var(--space-5)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-4)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}>

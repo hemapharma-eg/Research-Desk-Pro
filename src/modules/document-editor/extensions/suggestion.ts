@@ -20,7 +20,7 @@ export const suggestion: Omit<SuggestionOptions, 'editor'> = {
         item.title?.toLowerCase().includes(query.toLowerCase()) ||
         item.year?.includes(query)
       )
-      .slice(0, 5) // Limit to top 5 matches
+      .slice(0, 100) // Increase limit to essentially show all imported references
       .map(ref => ({
         id: ref.id,
         label: `${ref.authors?.split(',')[0]} et al., ${ref.year}`,

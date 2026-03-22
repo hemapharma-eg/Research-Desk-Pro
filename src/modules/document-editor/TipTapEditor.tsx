@@ -29,6 +29,7 @@ import { crossRefSuggestion } from './extensions/crossRefSuggestion';
 import { FootnoteNode } from './extensions/FootnoteNode';
 import { EndnoteNode } from './extensions/EndnoteNode';
 import { CitationNode } from './extensions/CitationNode';
+import { GraphNode } from './extensions/GraphNode';
 import { MathNode } from './extensions/MathNode';
 import { suggestion } from './extensions/suggestion';
 import { Bibliography } from './components/Bibliography';
@@ -39,19 +40,22 @@ import { SearchAndReplace } from './extensions/SearchAndReplace';
 import { IndexGeneratorNode } from './extensions/IndexGeneratorNode';
 import { FindReplacePanel } from './components/FindReplacePanel';
 import { PaginationPanel } from './components/PaginationPanel';
+import { CitationPreferences } from './components/CitationPreferences';
 import { AcademicTemplates } from './templates';
 import './TipTapStyles.css';
 
 interface TipTapEditorProps {
+  documentTitle: string;
   content: string;
   onChange: (html: string) => void;
 }
 
-export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
+export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorProps) {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showFootnotePrompt, setShowFootnotePrompt] = useState(false);
   const [showEndnotePrompt, setShowEndnotePrompt] = useState(false);
   const [showPaginationPanel, setShowPaginationPanel] = useState(false);
+  const [showCitationPrefs, setShowCitationPrefs] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showTrackChanges, setShowTrackChanges] = useState(false);
@@ -61,7 +65,8 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
   const [pageSettings, setPageSettings] = useState({
     headerText: '',
     footerText: '',
-    pageNumberPosition: 'none'
+    pageNumberPosition: 'none',
+    citationStyle: 'apa'
   });
   const pageSettingsRef = useRef(pageSettings);
   pageSettingsRef.current = pageSettings;
@@ -86,7 +91,7 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
       Underline,
       Superscript,
       Subscript,
-      TextAlign.configure({ types: ['heading', 'paragraph', 'image'] }),
+      TextAlign.configure({ types: ['heading', 'paragraph', 'image', 'graphBlock'] }),
       CharacterCount,
       ResizableImageNode,
       Table.configure({
@@ -107,6 +112,7 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
       FootnoteNode,
       EndnoteNode,
       IndexGeneratorNode,
+      GraphNode,
       CrossReferenceNode.configure({
         suggestion: crossRefSuggestion,
       }),
@@ -280,19 +286,31 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
     return null;
   }
 
+  const handleExportDocx = async () => {
+    if (!editor) return;
+    try {
+      const result = await window.api.exportDocx(editor.getHTML(), documentTitle || 'Document');
+      
+      if (result && result.success) {
+        // Successfully saved quietly, or we can alert
+      } else if (result && !result.canceled) {
+        alert('Failed to export DOCX: ' + result.error);
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert('Error exporting document: ' + (e.message || String(e)));
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 0 }}>
       <div 
-        className="editor-toolbar" 
+        className="print-hidden tiptap-toolbar"
         style={{ 
-          display: 'flex', 
-          gap: 'var(--space-2)', 
-          padding: 'var(--space-2) 0', 
-          borderBottom: '1px solid var(--color-border-light)',
-          marginBottom: 'var(--space-4)',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          flexShrink: 0
+          display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-2)', 
+          borderBottom: '1px solid var(--color-border-light)', 
+          background: 'var(--color-bg-app)', alignItems: 'center', flexWrap: 'wrap',
+          position: 'sticky', top: 0, zIndex: 10
         }}
       >
         {/* Font Family */}
@@ -334,6 +352,41 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
         
         <div style={{ width: '1px', background: 'var(--color-border-light)', margin: '0 var(--space-2)' }}></div>
 
+        {/* Exporters */}
+        <button
+          onClick={handleExportDocx}
+          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-accent-primary)', color: 'var(--color-accent-primary)', cursor: 'pointer', background: 'var(--color-bg-app)', fontWeight: 'bold' }}
+          title="Export as Microsoft Word (.docx)"
+        >
+          📄 DOCX
+        </button>
+        <button
+          onClick={() => window.print()}
+          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-text-primary)', color: 'var(--color-text-primary)', cursor: 'pointer', background: 'var(--color-bg-app)', fontWeight: 'bold' }}
+          title="Print or Save as PDF"
+        >
+          🖨️ PDF
+        </button>
+
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => {
+              setShowCitationPrefs(!showCitationPrefs);
+              setShowPaginationPanel(false);
+            }}
+            style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-strong)', cursor: 'pointer', background: showCitationPrefs ? 'var(--color-bg-hover)' : 'var(--color-bg-surface)' }}
+          >
+            📑 Citation Style
+          </button>
+          {showCitationPrefs && (
+            <CitationPreferences 
+              settings={pageSettings} 
+              onChange={handlePageSettingsChange} 
+              onClose={() => setShowCitationPrefs(false)} 
+            />
+          )}
+        </div>
+
         {/* Templates */}
         <select
           value=""
@@ -345,7 +398,7 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
               }
             }
           }}
-          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-accent-primary)', color: 'var(--color-accent-primary)', cursor: 'pointer', background: 'var(--color-bg-app)', fontWeight: 'bold' }}
+          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'var(--color-bg-app)' }}
         >
           <option value="" disabled>Load Template...</option>
           <option value="journalManuscript">Journal Manuscript</option>
@@ -540,6 +593,13 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
           title="Insert Table"
         >
           📊 Table
+        </button>
+        <button
+          onClick={() => editor.chain().focus().insertGraph().run()}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'transparent' }}
+          title="Insert Graph"
+        >
+          📈 Graph
         </button>
         <button
           onClick={() => editor.chain().focus().insertContent('<div data-type="math-block"></div>').run()}
@@ -776,7 +836,7 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
               <div style={{ padding: '0 25.4mm' }}>
                  <FootnoteList editorJson={editor.getJSON()} />
                  <EndnoteList editorJson={editor.getJSON()} />
-                 <Bibliography editorJson={editor.getJSON()} />
+                 <Bibliography editorJson={editor.getJSON()} citationStyle={pageSettings.citationStyle} />
               </div>
               
               {(pageSettings.footerText || (pageSettings.pageNumberPosition !== 'none' && pageSettings.pageNumberPosition.includes('bottom'))) && (
@@ -807,7 +867,7 @@ export function TipTapEditor({ content, onChange }: TipTapEditorProps) {
         {showTrackChanges && (<TrackChangesSidebar editor={editor} onClose={() => setShowTrackChanges(false)} />)}
       </div>
 
-      <div style={{ 
+      <div className="print-hidden" style={{ 
         padding: 'var(--space-2) var(--space-4)', 
         borderTop: '1px solid var(--color-border-light)', 
         fontSize: 'var(--font-size-sm)', 
