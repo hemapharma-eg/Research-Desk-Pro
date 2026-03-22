@@ -5,6 +5,8 @@ const ipcRenderer = electron.ipcRenderer;
 contextBridge.exposeInMainWorld('api', {
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
   openImageDialog: () => ipcRenderer.invoke('dialog:openImage'),
+  openPdfDialog: () => ipcRenderer.invoke('dialog:openPdf'),
+  openPath: (filePath) => ipcRenderer.invoke('dialog:openPath', filePath),
   createOrOpenProject: (path) => ipcRenderer.invoke('project:createOrOpen', path),
   closeProject: () => ipcRenderer.invoke('project:close'),
   getCurrentProject: () => ipcRenderer.invoke('project:getCurrent'),
@@ -17,8 +19,15 @@ contextBridge.exposeInMainWorld('api', {
   deleteReference: (id) => ipcRenderer.invoke('reference:delete', id),
   fetchDOI: (doi) => ipcRenderer.invoke('reference:fetchDOI', doi),
   importReferencesFile: () => ipcRenderer.invoke('reference:importFile'),
+  exportLib: (refs, format) => ipcRenderer.invoke('reference:exportLib', refs, format),
   importStyleFile: () => ipcRenderer.invoke('reference:importStyle'),
   getCustomStyles: () => ipcRenderer.invoke('reference:getCustomStyles'),
+  getFolders: () => ipcRenderer.invoke('reference:getFolders'),
+  createFolder: (name, parent_id) => ipcRenderer.invoke('reference:createFolder', name, parent_id),
+  deleteFolder: (id) => ipcRenderer.invoke('reference:deleteFolder', id),
+  renameFolder: (id, newName) => ipcRenderer.invoke('reference:renameFolder', id, newName),
+  getFoldersByRef: (ref_id) => ipcRenderer.invoke('reference:getFoldersByRef', ref_id),
+  setFoldersForRef: (ref_id, folder_ids) => ipcRenderer.invoke('reference:setFoldersForRef', ref_id, folder_ids),
 
   // Documents
   getDocuments: () => ipcRenderer.invoke('document:getAll'),

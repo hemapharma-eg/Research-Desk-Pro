@@ -92,17 +92,22 @@ export function Bibliography({ editorJson, citationStyle = 'apa' }: Bibliography
       <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 'var(--space-3)' }}>References</h2>
       <style>{`
         .bibliography-container .csl-entry {
-          display: flex;
+          display: block;
           margin-bottom: 12px;
           line-height: 1.5;
+          padding-left: 2em;
+          text-indent: -2em;
         }
         .bibliography-container .csl-left-margin {
-          margin-right: 12px;
+          display: inline-block;
           min-width: 24px;
           text-align: right;
+          margin-right: 8px;
+          text-indent: 0;
         }
         .bibliography-container .csl-right-inline {
-          flex: 1;
+          display: inline;
+          text-indent: 0;
         }
       `}</style>
       <div dangerouslySetInnerHTML={{ __html: htmlContent }} />

@@ -17,7 +17,16 @@ export interface Reference {
   journal: string | null;
   doi: string | null;
   raw_metadata: string | null;
+  notes?: string | null;
+  tags?: string | null;
+  pdf_path?: string | null;
   review_status?: 'unreviewed' | 'included' | 'excluded' | string;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  parent_id: string | null;
 }
 
 export interface CustomStyle {
@@ -28,6 +37,9 @@ export interface CustomStyle {
 
 export interface ElectronAPI {
   openDirectoryDialog: () => Promise<string | null>;
+  openImageDialog: () => Promise<string | null>;
+  openPdfDialog: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  openPath: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   createOrOpenProject: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>;
   closeProject: () => Promise<{ success: boolean }>;
   getCurrentProject: () => Promise<{ success: boolean; path?: string | null }>;
@@ -39,8 +51,16 @@ export interface ElectronAPI {
   deleteReference: (id: string) => Promise<{ success: boolean; error?: string }>;
   
   importReferencesFile: () => Promise<{ success: boolean; count?: number; data?: Reference[]; canceled?: boolean; error?: string }>;
+  exportLib: (refs: Reference[], format: 'ris' | 'bib') => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
   importStyleFile: () => Promise<{ success: boolean; data?: CustomStyle; canceled?: boolean; error?: string }>;
   getCustomStyles: () => Promise<{ success: boolean; data?: CustomStyle[]; error?: string }>;
+
+  getFolders: () => Promise<{ success: boolean; data?: Folder[]; error?: string }>;
+  createFolder: (name: string, parent_id?: string | null) => Promise<{ success: boolean; data?: Folder; error?: string }>;
+  deleteFolder: (id: string) => Promise<{ success: boolean; error?: string }>;
+  renameFolder: (id: string, newName: string) => Promise<{ success: boolean; data?: Folder; error?: string }>;
+  getFoldersByRef: (ref_id: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
+  setFoldersForRef: (ref_id: string, folder_ids: string[]) => Promise<{ success: boolean; error?: string }>;
 
   fetchDOI: (doi: string) => Promise<{ success: boolean; data?: Partial<Reference>; error?: string }>;
 

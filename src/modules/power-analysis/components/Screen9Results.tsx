@@ -76,6 +76,16 @@ export function Screen9Results() {
 
   const handlePdfExport = async () => exportToPdf(state, results, exportRef.current);
   const handleTxtExport = () => exportToTxt(state, results);
+  const handleJsonExport = () => {
+    const jsonStr = JSON.stringify(state, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `power-analysis-template-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div style={{ padding: 'var(--space-6)', maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -177,13 +187,21 @@ export function Screen9Results() {
 
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginTop: 'var(--space-6)' }}>
-          <button onClick={handlePdfExport} style={{ width: '100%', padding: 'var(--space-4)', backgroundColor: '#EEF2FF', color: '#4338CA', border: '2px solid #6366F1', borderRadius: 'var(--radius-lg)', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 2px 4px rgba(99, 102, 241, 0.2)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginTop: 'var(--space-6)' }}>
+          <button onClick={handlePdfExport} style={{ width: '100%', padding: 'var(--space-4)', backgroundColor: '#EEF2FF', color: '#4338CA', border: '2px solid #6366F1', borderRadius: 'var(--radius-lg)', fontWeight: 'bold', fontSize: '1.05rem', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 2px 4px rgba(99, 102, 241, 0.2)' }}>
             📁 Download Enhanced PDF Report
           </button>
-          <button onClick={handleTxtExport} style={{ width: '100%', padding: 'var(--space-4)', backgroundColor: 'white', color: '#334155', border: '2px solid #CBD5E1', borderRadius: 'var(--radius-lg)', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+          <button onClick={handleTxtExport} style={{ width: '100%', padding: 'var(--space-4)', backgroundColor: 'white', color: '#334155', border: '2px solid #CBD5E1', borderRadius: 'var(--radius-lg)', fontWeight: 'bold', fontSize: '1.05rem', cursor: 'pointer', transition: 'background-color 0.2s' }}>
             📄 Download TXT Methodology
           </button>
+          <button onClick={handleJsonExport} style={{ width: '100%', padding: 'var(--space-4)', backgroundColor: '#ECFDF5', color: '#065F46', border: '2px solid #34D399', borderRadius: 'var(--radius-lg)', fontWeight: 'bold', fontSize: '1.05rem', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 2px 4px rgba(52, 211, 153, 0.2)' }}>
+            💾 Save as JSON Template
+          </button>
+        </div>
+        <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', backgroundColor: '#F0FDF4', borderRadius: 'var(--radius-md)', border: '1px solid #BBF7D0' }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#166534', fontWeight: '500' }}>
+            💡 <strong>Tip:</strong> The JSON template saves all your current settings and parameters. You can reload it later using the <strong>"📂 Load Template"</strong> button on the opening screen to edit or re-run your analysis without re-entering all values.
+          </p>
         </div>
         </>
       )}

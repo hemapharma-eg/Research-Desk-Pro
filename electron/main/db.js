@@ -57,13 +57,34 @@ function initDatabase(projectPath) {
         name TEXT NOT NULL,
         xml_content TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS folders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        parent_id TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS reference_folders (
+        ref_id TEXT,
+        folder_id TEXT,
+        PRIMARY KEY(ref_id, folder_id)
+      );
     `);
 
-    // Migration: Ensure review_status column exists for older projects
-    try {
-      db.exec(`ALTER TABLE references_list ADD COLUMN review_status TEXT DEFAULT 'unreviewed'`);
-    } catch (e) {
-      // Column already exists
+    // Migration: Ensure new columns exist for older projects
+    const columnsToEnsure = [
+      { table: 'references_list', col: 'review_status', type: "TEXT DEFAULT 'unreviewed'" },
+      { table: 'references_list', col: 'notes', type: "TEXT" },
+      { table: 'references_list', col: 'tags', type: "TEXT" },
+      { table: 'references_list', col: 'pdf_path', type: "TEXT" }
+    ];
+
+    for (const {table, col, type} of columnsToEnsure) {
+      try {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+      } catch (e) {
+        // Column already exists
+      }
     }
 
     // Insert or update project creation time
@@ -101,21 +122,39 @@ function addReference(ref) {
   const dbInst = getDb();
   const id = crypto.randomUUID();
   const stmt = dbInst.prepare(`
-    INSERT INTO references_list (id, authors, title, year, journal, doi, raw_metadata)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO references_list (id, authors, title, year, journal, doi, raw_metadata, notes, tags, pdf_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  stmt.run(id, ref.authors, ref.title, ref.year, ref.journal, ref.doi || null, ref.raw_metadata || null);
+  stmt.run(
+    id, ref.authors, ref.title, ref.year, ref.journal, ref.doi || null, ref.raw_metadata || null,
+    ref.notes || null, ref.tags || null, ref.pdf_path || null
+  );
   return { id, ...ref };
 }
 
 function updateReference(id, updates) {
   const dbInst = getDb();
+  
+  // Dynamic update logic to preserve existing fields if not provided
+  const current = dbInst.prepare(`SELECT * FROM references_list WHERE id = ?`).get(id);
+  if (!current) throw new Error('Reference not found');
+
+  const newAuthors = updates.authors !== undefined ? updates.authors : current.authors;
+  const newTitle = updates.title !== undefined ? updates.title : current.title;
+  const newYear = updates.year !== undefined ? updates.year : current.year;
+  const newJournal = updates.journal !== undefined ? updates.journal : current.journal;
+  const newDoi = updates.doi !== undefined ? updates.doi : current.doi;
+  const newRawMetadata = updates.raw_metadata !== undefined ? updates.raw_metadata : current.raw_metadata;
+  const newNotes = updates.notes !== undefined ? updates.notes : current.notes;
+  const newTags = updates.tags !== undefined ? updates.tags : current.tags;
+  const newPdfPath = updates.pdf_path !== undefined ? updates.pdf_path : current.pdf_path;
+
   const stmt = dbInst.prepare(`
     UPDATE references_list 
-    SET authors = ?, title = ?, year = ?, journal = ?, doi = ?, raw_metadata = ?
+    SET authors = ?, title = ?, year = ?, journal = ?, doi = ?, raw_metadata = ?, notes = ?, tags = ?, pdf_path = ?
     WHERE id = ?
   `);
-  stmt.run(updates.authors, updates.title, updates.year, updates.journal, updates.doi || null, updates.raw_metadata || null, id);
+  stmt.run(newAuthors, newTitle, newYear, newJournal, newDoi, newRawMetadata, newNotes, newTags, newPdfPath, id);
   return { id, ...updates };
 }
 
@@ -146,6 +185,55 @@ function addCustomStyle(id, name, xml_content) {
   `);
   stmt.run(id, name, xml_content);
   return { id, name, xml_content };
+}
+
+// === FOLDERS ===
+
+function getFolders() {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM folders`).all();
+}
+
+function createFolder(name, parent_id = null) {
+  const dbInst = getDb();
+  const id = crypto.randomUUID();
+  const stmt = dbInst.prepare(`INSERT INTO folders (id, name, parent_id) VALUES (?, ?, ?)`);
+  stmt.run(id, name, parent_id);
+  return { id, name, parent_id };
+}
+
+function deleteFolder(id) {
+  const dbInst = getDb();
+  // We should also delete mappings
+  dbInst.prepare(`DELETE FROM reference_folders WHERE folder_id = ?`).run(id);
+  dbInst.prepare(`DELETE FROM folders WHERE id = ?`).run(id);
+  // Also delete child folders cascade (simple approach for now: just level 1)
+  dbInst.prepare(`DELETE FROM folders WHERE parent_id = ?`).run(id);
+  return { success: true };
+}
+
+function renameFolder(id, newName) {
+  const dbInst = getDb();
+  dbInst.prepare(`UPDATE folders SET name = ? WHERE id = ?`).run(newName, id);
+  return { id, name: newName };
+}
+
+function getReferenceFolders(ref_id) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT folder_id FROM reference_folders WHERE ref_id = ?`).all().map(r => r.folder_id);
+}
+
+function setReferenceFolders(ref_id, folder_ids) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction(() => {
+    dbInst.prepare(`DELETE FROM reference_folders WHERE ref_id = ?`).run(ref_id);
+    const insert = dbInst.prepare(`INSERT INTO reference_folders (ref_id, folder_id) VALUES (?, ?)`);
+    for (const fId of folder_ids) {
+      insert.run(ref_id, fId);
+    }
+  });
+  tx();
+  return { success: true };
 }
 
 // === DOCUMENTS ===
@@ -211,6 +299,13 @@ module.exports = {
 
   getCustomStyles,
   addCustomStyle,
+
+  getFolders,
+  createFolder,
+  deleteFolder,
+  renameFolder,
+  getReferenceFolders,
+  setReferenceFolders,
 
   getDocuments,
   getDocument,

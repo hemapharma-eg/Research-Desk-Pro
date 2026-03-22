@@ -29,9 +29,32 @@ ipcMain.handle('dialog:openImage', async (event) => {
     const mimeType = ext === 'svg' ? 'image/svg+xml' : (ext === 'jpg' ? 'image/jpeg' : `image/${ext}`);
     const base64str = fs.readFileSync(filePaths[0], { encoding: 'base64' });
     return `data:${mimeType};base64,${base64str}`;
+    return `data:${mimeType};base64,${base64str}`;
   } catch (err) {
     console.error("Failed to read image file", err);
     return null;
+  }
+});
+
+ipcMain.handle('dialog:openPdf', async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'PDF Documents', extensions: ['pdf'] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) { return null; }
+  return filePaths[0]; // Return the absolute path
+});
+
+ipcMain.handle('dialog:openPath', async (event, filePath) => {
+  try {
+    const { shell } = require('electron');
+    await shell.openPath(filePath);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to open path:', error);
+    return { success: false, error: String(error) };
   }
 });
 
@@ -168,6 +191,54 @@ ipcMain.handle('reference:importFile', async () => {
   }
 });
 
+ipcMain.handle('reference:exportLib', async (event, refs, format = 'ris') => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: `Export ${format.toUpperCase()}`,
+      defaultPath: `library.${format}`,
+      filters: [{ name: format.toUpperCase(), extensions: [format] }]
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    const { Cite } = require('@citation-js/core');
+    require('@citation-js/plugin-bibtex');
+    require('@citation-js/plugin-ris');
+
+    // Reconstruct citation-js data structures from our sqlite fields
+    // If raw_metadata exists, use it. Otherwise, build basic CSL-JSON.
+    const mapped = refs.map(r => {
+      if (r.raw_metadata) {
+        try { return JSON.parse(r.raw_metadata); } catch(e) {}
+      }
+      return {
+        id: r.id,
+        type: 'article-journal',
+        title: r.title,
+        author: r.authors ? [{ literal: r.authors }] : undefined,
+        issued: r.year ? { 'date-parts': [[parseInt(r.year)]] } : undefined,
+        'container-title': r.journal,
+        DOI: r.doi
+      };
+    });
+
+    const cite = new Cite(mapped);
+    let output = '';
+    
+    if (format === 'bib') {
+      output = cite.format('bibtex');
+    } else {
+      output = cite.format('ris');
+    }
+
+    fs.writeFileSync(filePath, output, 'utf-8');
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Export Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
 ipcMain.handle('reference:importStyle', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -196,6 +267,61 @@ ipcMain.handle('reference:getCustomStyles', async () => {
   try {
     const styles = dbManager.getCustomStyles();
     return { success: true, data: styles };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// --- Folders ---
+ipcMain.handle('reference:getFolders', async () => {
+  try {
+    const folders = dbManager.getFolders();
+    return { success: true, data: folders };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reference:createFolder', async (event, name, parent_id) => {
+  try {
+    const folder = dbManager.createFolder(name, parent_id);
+    return { success: true, data: folder };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reference:deleteFolder', async (event, id) => {
+  try {
+    dbManager.deleteFolder(id);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reference:renameFolder', async (event, id, newName) => {
+  try {
+    const folder = dbManager.renameFolder(id, newName);
+    return { success: true, data: folder };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reference:getFoldersByRef', async (event, ref_id) => {
+  try {
+    const folderIds = dbManager.getReferenceFolders(ref_id);
+    return { success: true, data: folderIds }; // array of strings
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reference:setFoldersForRef', async (event, ref_id, folder_ids) => {
+  try {
+    dbManager.setReferenceFolders(ref_id, folder_ids);
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }

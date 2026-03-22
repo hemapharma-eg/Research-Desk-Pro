@@ -27,7 +27,38 @@ import { Screen7Feasibility } from './components/Screen7Feasibility';
 import { Screen9Results } from './components/Screen9Results';
 
 function WizardContent() {
-  const { state } = usePowerWizard();
+  const { state, updateState } = usePowerWizard();
+
+  const handleLoadTemplate = async () => {
+    try {
+      // Use the generic file open dialog
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        try {
+          const parsed = JSON.parse(text);
+          // Validate it looks like a StudyState
+          if (parsed && typeof parsed === 'object' && 'researchSetting' in parsed) {
+            // Reset step to 0 so user can review from beginning
+            updateState({ ...parsed, step: 0 });
+            alert('Template loaded successfully! Review your settings and proceed through the wizard.');
+          } else {
+            alert('Invalid template file. Please select a JSON file previously exported from Power Analysis.');
+          }
+        } catch {
+          alert('Failed to parse JSON file. The file may be corrupted.');
+        }
+      };
+      input.click();
+    } catch (err) {
+      console.error('Load template error:', err);
+      alert('Error loading template.');
+    }
+  };
 
   // Dynamic Route Engine
   const getRoute = () => {
@@ -97,7 +128,7 @@ function WizardContent() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <button style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-app)', cursor: 'pointer', fontSize: 'var(--font-size-sm)', fontWeight: 'bold' }}>Load Template</button>
+          <button onClick={handleLoadTemplate} style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-app)', cursor: 'pointer', fontSize: 'var(--font-size-sm)', fontWeight: 'bold' }}>📂 Load Template</button>
         </div>
       </div>
 
