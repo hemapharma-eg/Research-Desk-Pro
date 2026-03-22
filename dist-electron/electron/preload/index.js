@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('api', {
   updateReferenceStatus: (id, status) => ipcRenderer.invoke('reference:updateStatus', id, status),
   deleteReference: (id) => ipcRenderer.invoke('reference:delete', id),
   fetchDOI: (doi) => ipcRenderer.invoke('reference:fetchDOI', doi),
+  importReferencesFile: () => ipcRenderer.invoke('reference:importFile'),
+  importStyleFile: () => ipcRenderer.invoke('reference:importStyle'),
+  getCustomStyles: () => ipcRenderer.invoke('reference:getCustomStyles'),
 
   // Documents
   getDocuments: () => ipcRenderer.invoke('document:getAll'),

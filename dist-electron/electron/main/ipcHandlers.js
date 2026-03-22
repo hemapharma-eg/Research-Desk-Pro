@@ -96,6 +96,111 @@ ipcMain.handle('reference:delete', async (event, id) => {
   }
 });
 
+ipcMain.handle('reference:importFile', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Reference Files', extensions: ['ris', 'bib'] }]
+  });
+  if (canceled || filePaths.length === 0) return { success: false, canceled: true };
+  try {
+    const fileText = fs.readFileSync(filePaths[0], 'utf-8');
+    
+    // Lazy load citation-js plugins
+    const { Cite } = require('@citation-js/core');
+    require('@citation-js/plugin-bibtex');
+    require('@citation-js/plugin-ris');
+
+    let parsedData = [];
+
+    if (filePaths[0].toLowerCase().endsWith('.bib')) {
+      // Robust BibTeX parsing: split by entries and parse individually
+      // This avoids the strict parser crashing on trailing commas between entries
+      const entryRegex = /@\w+\s*\{/g;
+      const entryStarts = [];
+      let match;
+      while ((match = entryRegex.exec(fileText)) !== null) {
+        entryStarts.push(match.index);
+      }
+
+      for (let i = 0; i < entryStarts.length; i++) {
+        const start = entryStarts[i];
+        const end = i + 1 < entryStarts.length ? entryStarts[i + 1] : fileText.length;
+        let entryText = fileText.substring(start, end).trim();
+        // Remove any trailing comma after the closing brace
+        entryText = entryText.replace(/\}\s*,\s*$/, '}');
+        try {
+          const entryCite = new Cite(entryText);
+          parsedData = parsedData.concat(entryCite.data);
+        } catch (entryErr) {
+          console.warn('Skipping malformed BibTeX entry:', entryText.substring(0, 80), entryErr.message);
+        }
+      }
+    } else {
+      // RIS and other formats: parse whole file at once
+      const cite = new Cite(fileText);
+      parsedData = cite.data;
+    }
+    
+    const addedReferences = [];
+    for (const item of parsedData) {
+      const authors = item.author ? item.author.map(a => `${a.given || ''} ${a.family || ''}`.trim()).join(', ') : 'Unknown Author';
+      const title = item.title || 'Untitled';
+      const year = item.issued && item.issued['date-parts'] ? item.issued['date-parts'][0][0].toString() : 'Unknown Year';
+      const containerTitle = item['container-title'] || item.publisher || 'Unknown Journal';
+      const doi = item.DOI || '';
+      
+      const refData = {
+        authors,
+        title,
+        year,
+        journal: containerTitle,
+        doi,
+        raw_metadata: JSON.stringify(item)
+      };
+      const added = dbManager.addReference(refData);
+      addedReferences.push(added);
+    }
+
+    return { success: true, count: addedReferences.length, data: addedReferences };
+  } catch (error) {
+    console.error('Import Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('reference:importStyle', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'CSL Style', extensions: ['csl'] }]
+  });
+  if (canceled || filePaths.length === 0) return { success: false, canceled: true };
+  try {
+    const xml_content = fs.readFileSync(filePaths[0], 'utf-8');
+    const idMatch = xml_content.match(/<id>(.*?)<\/id>/);
+    const titleMatch = xml_content.match(/<title>(.*?)<\/title>/);
+    
+    const fileName = path.basename(filePaths[0], '.csl');
+    let id = idMatch ? idMatch[1].split('/').pop() : fileName;
+    let name = titleMatch ? titleMatch[1] : fileName;
+    id = id.replace(/[^a-zA-Z0-9_-]/g, '-');
+    
+    const style = dbManager.addCustomStyle(id, name, xml_content);
+    return { success: true, data: style };
+  } catch (error) {
+    console.error('Import Style Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('reference:getCustomStyles', async () => {
+  try {
+    const styles = dbManager.getCustomStyles();
+    return { success: true, data: styles };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // --- Utilities ---
 ipcMain.handle('reference:fetchDOI', async (event, doi) => {
   try {

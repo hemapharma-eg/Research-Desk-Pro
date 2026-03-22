@@ -51,6 +51,12 @@ function initDatabase(projectPath) {
         raw_metadata TEXT,
         review_status TEXT DEFAULT 'unreviewed'
       );
+
+      CREATE TABLE IF NOT EXISTS custom_styles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        xml_content TEXT NOT NULL
+      );
     `);
 
     // Migration: Ensure review_status column exists for older projects
@@ -127,6 +133,21 @@ function updateReferenceStatus(id, status) {
   return { id, review_status: status };
 }
 
+function getCustomStyles() {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM custom_styles`).all();
+}
+
+function addCustomStyle(id, name, xml_content) {
+  const dbInst = getDb();
+  const stmt = dbInst.prepare(`
+    INSERT OR REPLACE INTO custom_styles (id, name, xml_content)
+    VALUES (?, ?, ?)
+  `);
+  stmt.run(id, name, xml_content);
+  return { id, name, xml_content };
+}
+
 // === DOCUMENTS ===
 
 function getDocuments() {
@@ -187,6 +208,9 @@ module.exports = {
   updateReference,
   updateReferenceStatus,
   deleteReference,
+
+  getCustomStyles,
+  addCustomStyle,
 
   getDocuments,
   getDocument,

@@ -1,139 +1,121 @@
-import { useState, useMemo } from 'react';
+import React from 'react';
+import { PowerWizardProvider, usePowerWizard } from './context/PowerWizardContext';
+import { WizardStepper } from './components/WizardStepper';
 
-// Common Z-score approximations for critical values
-const Z_VALUES: Record<string, number> = {
-  // Alpha (two-tailed)
-  '0.01': 2.576,
-  '0.05': 1.960,
-  '0.10': 1.645,
-  // Power (80%, 90%, 95%)
-  '0.80': 0.841,
-  '0.90': 1.282,
-  '0.95': 1.645,
-};
+import { Screen0Setting } from './components/Screen0Setting';
+// Preclinical Block
+import { ScreenAContext } from './components/preclinical/ScreenAContext';
+import { ScreenBSpecies } from './components/preclinical/ScreenBSpecies';
+import { ScreenCExperimentalUnit } from './components/preclinical/ScreenCExperimentalUnit';
+import { ScreenDPseudoreplication } from './components/preclinical/ScreenDPseudoreplication';
+import { ScreenEIntent } from './components/preclinical/ScreenEIntent';
+import { ScreenFBiologicallyRelevantEffect } from './components/preclinical/ScreenFBiologicallyRelevantEffect';
+import { ScreenGSpecialDesign } from './components/preclinical/ScreenGSpecialDesign';
 
-export function PowerAnalysis() {
-  const [alpha, setAlpha] = useState<string>('0.05');
-  const [power, setPower] = useState<string>('0.80');
-  const [effectSize, setEffectSize] = useState<string>('0.5');
+// Shared / Clinical Block (Screens 1-4)
+import { Screen1Endpoint } from './components/Screen1Endpoint';
+import { Screen2Structure } from './components/Screen2Structure';
+import { Screen3Objective } from './components/Screen3Objective';
+import { Screen4Analysis } from './components/Screen4Analysis';
 
-  // Calculate required sample size per group based on standard formula:
-  // n = 2 * ((Z_alpha/2 + Z_beta) / d)^2
-  const requiredN = useMemo(() => {
-    const d = parseFloat(effectSize);
-    if (isNaN(d) || d <= 0) return 0;
+// Parameter Block (Screens 5-7)
+import { Screen5Characteristics } from './components/Screen5Characteristics';
+import { Screen6Assumptions } from './components/Screen6Assumptions';
+import { Screen7Feasibility } from './components/Screen7Feasibility';
 
-    const zAlpha = Z_VALUES[alpha] || 1.96;
-    const zPower = Z_VALUES[power] || 0.841;
+// Legacy Output Phase
+import { Screen9Results } from './components/Screen9Results';
 
-    // Standard formula for two-independent-sample t-test
-    const n = 2 * Math.pow((zAlpha + zPower) / d, 2);
+function WizardContent() {
+  const { state } = usePowerWizard();
+
+  // Dynamic Route Engine
+  const getRoute = () => {
+    const route = [Screen0Setting];
     
-    return Math.ceil(n); // Always round up to ensure sufficient power
-  }, [alpha, power, effectSize]);
+    if (state.researchSetting === 'preclinical') {
+      route.push(
+        ScreenAContext,
+        ScreenBSpecies,
+        ScreenCExperimentalUnit,
+        ScreenDPseudoreplication,
+        ScreenEIntent,
+        ScreenFBiologicallyRelevantEffect,
+        ScreenGSpecialDesign
+      );
+    }
+    
+    // Full guided wizard pipeline
+    route.push(
+      Screen1Endpoint,
+      Screen2Structure,
+      Screen3Objective,
+      Screen4Analysis,
+      Screen5Characteristics,
+      Screen6Assumptions,
+      Screen7Feasibility,
+      Screen9Results
+    );
+    
+    return route;
+  };
 
-  // Total N for both groups
-  const totalN = requiredN * 2;
+  const route = getRoute();
+  const CurrentComponent = route[state.step] || Screen0Setting;
+
+  // Phase color theming based on step index
+  const getPhaseInfo = () => {
+    const s = state.step;
+    const isPreclinical = state.researchSetting === 'preclinical';
+    
+    if (s === 0) return { label: 'Research Setting', color: '#6366F1', bg: '#EEF2FF' };
+    if (isPreclinical && s >= 1 && s <= 7) return { label: 'Preclinical Rigor', color: '#059669', bg: '#ECFDF5' };
+    const shared = s - (isPreclinical ? 7 : 0);
+    if (shared === 1) return { label: 'Endpoint Family', color: '#2563EB', bg: '#EFF6FF' };
+    if (shared === 2) return { label: 'Design Structure', color: '#0891B2', bg: '#ECFEFF' };
+    if (shared === 3) return { label: 'Study Objective', color: '#7C3AED', bg: '#F5F3FF' };
+    if (shared === 4) return { label: 'Analysis Model', color: '#C026D3', bg: '#FDF4FF' };
+    if (shared === 5) return { label: 'Operating Characteristics', color: '#EA580C', bg: '#FFF7ED' };
+    if (shared === 6) return { label: 'Mathematical Assumptions', color: '#DC2626', bg: '#FEF2F2' };
+    if (shared === 7) return { label: 'Feasibility Constraints', color: '#CA8A04', bg: '#FEFCE8' };
+    if (shared === 8) return { label: 'Results Dashboard', color: '#16A34A', bg: '#F0FDF4' };
+    return { label: `Step ${s + 1}`, color: '#64748B', bg: '#F8FAFC' };
+  };
+  const phase = getPhaseInfo();
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-      {/* Sidebar Form Pane */}
-      <div style={{ width: '350px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flexShrink: 0 }}>
-        
-        <div style={{ backgroundColor: 'var(--color-bg-sidebar)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)' }}>
-          <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)', marginBottom: 'var(--space-2)' }}>T-Test Parameters</h2>
-          <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-5)' }}>
-            Calculate the required sample size for a two-independent-sample comparison.
-          </p>
-
-          <form style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            
-            {/* Alpha Level */}
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              <label htmlFor="alpha" style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>
-                Significance Level (α)
-              </label>
-              <select 
-                id="alpha" 
-                value={alpha} 
-                onChange={(e) => setAlpha(e.target.value)}
-                style={{ padding: 'var(--space-2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-app)', color: 'var(--color-text-primary)' }}
-              >
-                <option value="0.10">0.10 (Marginal)</option>
-                <option value="0.05">0.05 (Standard)</option>
-                <option value="0.01">0.01 (Strict)</option>
-              </select>
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Probability of a Type I error (false positive).</p>
-            </div>
-
-            {/* Statistical Power */}
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              <label htmlFor="power" style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>
-                Statistical Power (1-β)
-              </label>
-              <select 
-                id="power" 
-                value={power} 
-                onChange={(e) => setPower(e.target.value)}
-                style={{ padding: 'var(--space-2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-app)', color: 'var(--color-text-primary)' }}
-              >
-                <option value="0.80">0.80 (Standard)</option>
-                <option value="0.90">0.90 (High)</option>
-                <option value="0.95">0.95 (Very High)</option>
-              </select>
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Probability of detecting a true effect.</p>
-            </div>
-
-            {/* Effect Size */}
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              <label htmlFor="effectSize" style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-secondary)' }}>
-                Effect Size (Cohen's d)
-              </label>
-              <input 
-                id="effectSize" 
-                type="number" 
-                step="0.1" 
-                min="0.1" 
-                value={effectSize} 
-                onChange={(e) => setEffectSize(e.target.value)}
-                style={{ padding: 'var(--space-2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-app)', color: 'var(--color-text-primary)' }}
-              />
-              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-1)' }}>
-                Rule of thumb: 0.2 (Small), 0.5 (Medium), 0.8 (Large).
-              </p>
-            </div>
-            
-          </form>
-        </div>
-
-      </div>
-
-      {/* Main Results Pane */}
-      <div style={{ flex: 1, backgroundColor: 'var(--color-bg-sidebar)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', padding: 'var(--space-8)', justifyContent: 'center', alignItems: 'center' }}>
-        
-        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
-          <h1 style={{ fontSize: '3rem', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-accent-primary)', marginBottom: 'var(--space-2)', lineHeight: 1 }}>
-            {requiredN === 0 ? '--' : requiredN}
-          </h1>
-          <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)', marginBottom: 'var(--space-6)' }}>
-            Participants <span style={{ color: 'var(--color-text-secondary)' }}>per group</span>
-          </h3>
-
-          <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-bg-hover)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)' }}>
-              <span style={{ color: 'var(--color-text-secondary)', fontWeight: 'var(--font-weight-medium)' }}>Total Sample Size required:</span>
-              <span style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>
-                {requiredN === 0 ? '--' : totalN}
-              </span>
-            </div>
-            
-            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-tertiary)' }}>
-              This calculation assumes equal sample sizes in both groups (allocation ratio = 1) for a two-independent-sample t-test.
-            </p>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--color-bg-app)' }}>
+      {/* Header */}
+      <div style={{ borderBottom: `3px solid ${phase.color}`, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-4) var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-text-primary)', marginBottom: '2px' }}>Power Analysis Studio</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: '#64748B' }}>Integrated Clinical & Preclinical Edition</span>
+            <span style={{ padding: '2px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 'bold', backgroundColor: phase.bg, color: phase.color, border: `1px solid ${phase.color}30` }}>
+              {phase.label}
+            </span>
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-strong)', backgroundColor: 'var(--color-bg-app)', cursor: 'pointer', fontSize: 'var(--font-size-sm)', fontWeight: 'bold' }}>Load Template</button>
+        </div>
+      </div>
 
+      <div style={{ padding: 'var(--space-6) var(--space-6) 0 var(--space-6)' }}>
+         <WizardStepper totalSteps={route.length} currentStep={state.step} setting={state.researchSetting} />
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)' }}>
+         <CurrentComponent />
       </div>
     </div>
+  );
+}
+
+export function PowerAnalysis() {
+  return (
+    <PowerWizardProvider>
+      <WizardContent />
+    </PowerWizardProvider>
   );
 }
