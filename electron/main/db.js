@@ -43,6 +43,7 @@ function initDatabase(projectPath) {
 
       CREATE TABLE IF NOT EXISTS references_list (
         id TEXT PRIMARY KEY,
+        reference_type TEXT DEFAULT 'Journal Article',
         authors TEXT,
         title TEXT,
         year TEXT,
@@ -73,6 +74,7 @@ function initDatabase(projectPath) {
 
     // Migration: Ensure new columns exist for older projects
     const columnsToEnsure = [
+      { table: 'references_list', col: 'reference_type', type: "TEXT DEFAULT 'Journal Article'" },
       { table: 'references_list', col: 'review_status', type: "TEXT DEFAULT 'unreviewed'" },
       { table: 'references_list', col: 'notes', type: "TEXT" },
       { table: 'references_list', col: 'tags', type: "TEXT" },
@@ -122,11 +124,11 @@ function addReference(ref) {
   const dbInst = getDb();
   const id = crypto.randomUUID();
   const stmt = dbInst.prepare(`
-    INSERT INTO references_list (id, authors, title, year, journal, doi, raw_metadata, notes, tags, pdf_path)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO references_list (id, reference_type, authors, title, year, journal, doi, raw_metadata, notes, tags, pdf_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
-    id, ref.authors, ref.title, ref.year, ref.journal, ref.doi || null, ref.raw_metadata || null,
+    id, ref.reference_type || 'Journal Article', ref.authors, ref.title, ref.year, ref.journal, ref.doi || null, ref.raw_metadata || null,
     ref.notes || null, ref.tags || null, ref.pdf_path || null
   );
   return { id, ...ref };
@@ -139,6 +141,7 @@ function updateReference(id, updates) {
   const current = dbInst.prepare(`SELECT * FROM references_list WHERE id = ?`).get(id);
   if (!current) throw new Error('Reference not found');
 
+  const newReferenceType = updates.reference_type !== undefined ? updates.reference_type : current.reference_type;
   const newAuthors = updates.authors !== undefined ? updates.authors : current.authors;
   const newTitle = updates.title !== undefined ? updates.title : current.title;
   const newYear = updates.year !== undefined ? updates.year : current.year;
@@ -151,10 +154,10 @@ function updateReference(id, updates) {
 
   const stmt = dbInst.prepare(`
     UPDATE references_list 
-    SET authors = ?, title = ?, year = ?, journal = ?, doi = ?, raw_metadata = ?, notes = ?, tags = ?, pdf_path = ?
+    SET reference_type = ?, authors = ?, title = ?, year = ?, journal = ?, doi = ?, raw_metadata = ?, notes = ?, tags = ?, pdf_path = ?
     WHERE id = ?
   `);
-  stmt.run(newAuthors, newTitle, newYear, newJournal, newDoi, newRawMetadata, newNotes, newTags, newPdfPath, id);
+  stmt.run(newReferenceType, newAuthors, newTitle, newYear, newJournal, newDoi, newRawMetadata, newNotes, newTags, newPdfPath, id);
   return { id, ...updates };
 }
 

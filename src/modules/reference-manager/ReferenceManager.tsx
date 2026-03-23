@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import type { Reference, Folder } from '../../types/electron.d';
+import { AddReferenceModal } from './components/AddReferenceModal';
 
 // === HELPER STYLES ===
 const styles = {
@@ -57,6 +58,9 @@ export function ReferenceManager() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedRef, setSelectedRef] = useState<Reference | null>(null);
   
+  // Modals
+  const [showAddModal, setShowAddModal] = useState(false);
+
   // Deduplication State
   const [duplicateGroups, setDuplicateGroups] = useState<Reference[][]>([]);
 
@@ -163,16 +167,8 @@ export function ReferenceManager() {
     }
   };
 
-  const handleCreateNewBlankRef = async () => {
-    const payload = { title: 'New Reference', authors: '', year: new Date().getFullYear().toString(), journal: null, doi: null, raw_metadata: null };
-    const res = await window.api.createReference(payload);
-    if (res.success && res.data) {
-      if (selectedFolder) {
-        await window.api.setFoldersForRef(res.data.id, [selectedFolder]);
-      }
-      await loadData();
-      setSelectedRef(res.data);
-    }
+  const handleCreateNewRefModal = () => {
+    setShowAddModal(true);
   };
 
   const handleDeleteSelectedRef = async () => {
@@ -391,7 +387,7 @@ export function ReferenceManager() {
         {/* Toolbar */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleCreateNewBlankRef} style={styles.btnSecondary}>+ Add New</button>
+            <button onClick={handleCreateNewRefModal} style={styles.btnSecondary}>+ Add New</button>
             <button onClick={handleImport} style={styles.btnSecondary}>📥 Import RIS/Bib</button>
             <button onClick={handleFindDuplicates} style={{ ...styles.btnSecondary, color: '#059669', borderColor: '#34D399' }}>🔄 Find Duplicates</button>
             <button onClick={handleExportLibrary} style={styles.btnSecondary}>📤 Export Library</button>
@@ -652,11 +648,7 @@ export function ReferenceManager() {
       )}
 
       {/* ================= DEDUPLICATION MODAL ================= */}
-      {duplicateGroups !== null && duplicateGroups.length >= 0 && (
-        // We use a separate showDedupModal flag logic: show modal when groups were populated
-        // The modal stays open even when groups become empty (all resolved) to show success
-        null
-      )}
+      {/* We use a separate showDedupModal flag logic: show modal when groups were populated */}
       {/* Actual dedup modal rendered via state */}
       <DedupModal 
         groups={duplicateGroups}
@@ -669,6 +661,21 @@ export function ReferenceManager() {
         }}
         onClose={() => { setDuplicateGroups([]); loadData(); }}
       />
+
+      {showAddModal && (
+        <AddReferenceModal
+          initialType="journal_article"
+          onClose={() => setShowAddModal(false)}
+          onSave={async (ref) => {
+            if (selectedFolder) {
+               await window.api.setFoldersForRef(ref.id, [selectedFolder]);
+            }
+            setShowAddModal(false);
+            await loadData();
+            setSelectedRef(ref); // Select new reference
+          }}
+        />
+      )}
 
     </div>
   );

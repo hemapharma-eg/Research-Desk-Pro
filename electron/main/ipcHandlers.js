@@ -29,7 +29,6 @@ ipcMain.handle('dialog:openImage', async (event) => {
     const mimeType = ext === 'svg' ? 'image/svg+xml' : (ext === 'jpg' ? 'image/jpeg' : `image/${ext}`);
     const base64str = fs.readFileSync(filePaths[0], { encoding: 'base64' });
     return `data:${mimeType};base64,${base64str}`;
-    return `data:${mimeType};base64,${base64str}`;
   } catch (err) {
     console.error("Failed to read image file", err);
     return null;
@@ -206,20 +205,67 @@ ipcMain.handle('reference:exportLib', async (event, refs, format = 'ris') => {
     require('@citation-js/plugin-ris');
 
     // Reconstruct citation-js data structures from our sqlite fields
-    // If raw_metadata exists, use it. Otherwise, build basic CSL-JSON.
+    // Map our new StructuredMetadata JSON into CSL-JSON format
     const mapped = refs.map(r => {
-      if (r.raw_metadata) {
-        try { return JSON.parse(r.raw_metadata); } catch(e) {}
-      }
-      return {
+      let base = {
         id: r.id,
-        type: 'article-journal',
+        type: 'article-journal', // Default CSL type
         title: r.title,
         author: r.authors ? [{ literal: r.authors }] : undefined,
         issued: r.year ? { 'date-parts': [[parseInt(r.year)]] } : undefined,
         'container-title': r.journal,
         DOI: r.doi
       };
+
+      if (r.raw_metadata) {
+        try { 
+          const raw = JSON.parse(r.raw_metadata);
+          
+          // If it's our new StructuredMetadata form:
+          if (raw.reference_type) {
+            // Map types broadly
+            switch (raw.reference_type) {
+                case 'book': base.type = 'book'; break;
+                case 'book_chapter': base.type = 'chapter'; break;
+                case 'conference_paper': base.type = 'paper-conference'; break;
+                case 'thesis': base.type = 'thesis'; break;
+                case 'report': base.type = 'report'; break;
+                case 'webpage': base.type = 'webpage'; break;
+                case 'patent': base.type = 'patent'; break;
+                default: base.type = 'article-journal'; break;
+            }
+            
+            // Map complex contributors to CSL-JSON authors/editors
+            if (raw.contributors && Array.isArray(raw.contributors)) {
+                base.author = raw.contributors.filter(c => c.role === 'Author' || c.role === 'Organization').map(c => {
+                    if (c.isCorporate) return { literal: c.corporateName };
+                    return { given: c.firstName, family: c.lastName, literal: `${c.firstName || ''} ${c.lastName || ''}`.trim() };
+                });
+                const editors = raw.contributors.filter(c => c.role === 'Editor').map(c => {
+                    if (c.isCorporate) return { literal: c.corporateName };
+                    return { given: c.firstName, family: c.lastName, literal: `${c.firstName || ''} ${c.lastName || ''}`.trim() };
+                });
+                if (editors.length > 0) base.editor = editors;
+                if (base.author.length === 0) delete base.author; // Clean up
+            }
+
+            if (raw.volume) base.volume = raw.volume;
+            if (raw.issue) base.issue = raw.issue;
+            if (raw.pages_start) base.page = raw.pages_start + (raw.pages_end ? '-' + raw.pages_end : '');
+            if (raw.publisher) base.publisher = raw.publisher;
+            if (raw.place_published) base['publisher-place'] = raw.place_published;
+            if (raw.isbn) base.ISBN = raw.isbn;
+            if (raw.issn) base.ISSN = raw.issn;
+            if (raw.abstract) base.abstract = raw.abstract;
+            if (raw.url) base.URL = raw.url;
+
+          } else {
+             // It's the old citation-js raw metadata
+             return { ...base, ...raw };
+          }
+        } catch(e) { }
+      }
+      return base;
     });
 
     const cite = new Cite(mapped);

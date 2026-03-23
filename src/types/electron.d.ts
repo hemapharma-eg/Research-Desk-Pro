@@ -9,8 +9,61 @@ export interface Document extends DocMetadata {
   content: string;
 }
 
+export interface Contributor {
+  id: string;
+  role: string;
+  isCorporate?: boolean;
+  corporateName?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
+}
+
+export interface StructuredMetadata {
+  reference_type: string;
+  contributors: Contributor[];
+  subtitle?: string;
+  short_title?: string;
+  month?: string;
+  day?: string;
+  date_text?: string;
+  url?: string;
+  isbn?: string;
+  issn?: string;
+  pmid?: string;
+  pmcid?: string;
+  publication_status?: string;
+  language?: string;
+  abstract?: string;
+  keywords?: string[];
+  publisher?: string;
+  place_published?: string;
+  edition?: string;
+  volume?: string;
+  issue?: string;
+  pages_start?: string;
+  pages_end?: string;
+  article_number?: string;
+  source_title?: string;
+  container_title?: string;
+  series_title?: string;
+  series_number?: string;
+  report_number?: string;
+  patent_number?: string;
+  application_number?: string;
+  standard_number?: string;
+  version?: string;
+  archive?: string;
+  archive_location?: string;
+  accessed_date?: string;
+  custom_fields?: Record<string, any>;
+  [key: string]: any;
+}
+
 export interface Reference {
   id: string;
+  reference_type?: string;
   authors: string;
   title: string;
   year: string;
