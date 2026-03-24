@@ -35,5 +35,26 @@ contextBridge.exposeInMainWorld('api', {
   createDocument: (title) => ipcRenderer.invoke('document:create', title),
   updateDocument: (id, updates) => ipcRenderer.invoke('document:update', id, updates),
   deleteDocument: (id) => ipcRenderer.invoke('document:delete', id),
-  exportDocx: (html, title) => ipcRenderer.invoke('document:exportDocx', html, title)
+  exportDocx: (html, title) => ipcRenderer.invoke('document:exportDocx', html, title),
+
+  // Graphing Studio
+  getGraphingDatasets: () => ipcRenderer.invoke('graphing:getDatasets'),
+  getGraphingDataset: (id) => ipcRenderer.invoke('graphing:getDataset', id),
+  createGraphingDataset: (data) => ipcRenderer.invoke('graphing:createDataset', data),
+  updateGraphingDataset: (id, updates) => ipcRenderer.invoke('graphing:updateDataset', id, updates),
+  deleteGraphingDataset: (id) => ipcRenderer.invoke('graphing:deleteDataset', id),
+
+  getGraphingAnalyses: (datasetId) => ipcRenderer.invoke('graphing:getAnalyses', datasetId),
+  createGraphingAnalysis: (data) => ipcRenderer.invoke('graphing:createAnalysis', data),
+  deleteGraphingAnalysis: (id) => ipcRenderer.invoke('graphing:deleteAnalysis', id),
+
+  getGraphingFigures: (datasetId) => ipcRenderer.invoke('graphing:getFigures', datasetId),
+  getGraphingFigure: (id) => ipcRenderer.invoke('graphing:getFigure', id),
+  createGraphingFigure: (data) => ipcRenderer.invoke('graphing:createFigure', data),
+  updateGraphingFigure: (id, updates) => ipcRenderer.invoke('graphing:updateFigure', id, updates),
+  deleteGraphingFigure: (id) => ipcRenderer.invoke('graphing:deleteFigure', id),
+
+  exportGraphingFigure: (imageDataUrl, defaultName, format) => ipcRenderer.invoke('graphing:exportFigure', imageDataUrl, defaultName, format),
+
+  importCSVFile: () => ipcRenderer.invoke('graphing:importCSVFile')
 });

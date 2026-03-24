@@ -1,0 +1,615 @@
+/* Graphing Studio — Publication-Quality Scientific Workspace */
+
+.gs-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--color-bg-app);
+  font-family: var(--font-family-sans);
+  overflow: hidden;
+}
+
+/* ======================== Top Bar ======================== */
+.gs-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border-light);
+  flex-shrink: 0;
+  min-height: 52px;
+}
+
+.gs-topbar-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.gs-topbar-dot {
+  color: var(--color-accent-primary);
+}
+
+.gs-topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border-light);
+  flex-shrink: 0;
+}
+
+.gs-dataset-selector {
+  padding: 6px 12px;
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  min-width: 200px;
+  cursor: pointer;
+  outline: none;
+}
+.gs-dataset-selector:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 2px rgba(41, 98, 255, 0.12);
+}
+
+.gs-topbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.gs-btn {
+  padding: 6px 14px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.gs-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+.gs-btn-primary {
+  background: var(--color-accent-primary);
+  color: white;
+  border-color: var(--color-accent-primary);
+}
+.gs-btn-primary:hover {
+  background: var(--color-accent-hover);
+}
+.gs-btn-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+.gs-btn-danger:hover {
+  background: rgba(255, 59, 48, 0.08);
+}
+.gs-btn-sm {
+  padding: 4px 10px;
+  font-size: var(--font-size-xs);
+}
+.gs-btn-icon {
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ======================== Tab Bar ======================== */
+.gs-tabbar {
+  display: flex;
+  gap: 0;
+  background: var(--color-bg-sidebar);
+  border-bottom: 1px solid var(--color-border-light);
+  padding: 0 16px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.gs-tab {
+  padding: 10px 20px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  position: relative;
+}
+.gs-tab:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+.gs-tab.active {
+  color: var(--color-accent-primary);
+  border-bottom-color: var(--color-accent-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ======================== Workspace Content ======================== */
+.gs-workspace {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-app);
+}
+
+/* Inner content scroll */
+.gs-workspace-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+}
+
+/* ======================== Dashboard / Empty State ======================== */
+.gs-dashboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  gap: 32px;
+}
+
+.gs-dashboard-header {
+  text-align: center;
+}
+
+.gs-dashboard-header h2 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+}
+
+.gs-dashboard-header p {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.gs-dashboard-actions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.gs-dashboard-card {
+  width: 200px;
+  padding: 24px 20px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+.gs-dashboard-card:hover {
+  border-color: var(--color-accent-primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.gs-dashboard-card-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+.gs-dashboard-card-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+.gs-dashboard-card-desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* Recent datasets list */
+.gs-recent-list {
+  width: 100%;
+  max-width: 700px;
+}
+.gs-recent-list h3 {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 12px;
+}
+.gs-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.gs-recent-item:hover {
+  border-color: var(--color-accent-primary);
+  background: rgba(41, 98, 255, 0.04);
+}
+.gs-recent-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+.gs-recent-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+.gs-recent-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+}
+
+/* ======================== Split Panels ======================== */
+.gs-split-h {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.gs-split-v {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Side panel (right-side properties) */
+.gs-side-panel {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface);
+  overflow-y: auto;
+}
+
+/* ======================== Panel Sections ======================== */
+.gs-panel-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.gs-panel-section:last-child {
+  border-bottom: none;
+}
+.gs-panel-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ======================== Form Controls ======================== */
+.gs-label {
+  display: block;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gs-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.gs-input:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 2px rgba(41, 98, 255, 0.1);
+}
+.gs-select {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  outline: none;
+}
+.gs-select:focus {
+  border-color: var(--color-accent-primary);
+}
+.gs-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.gs-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.gs-form-group {
+  margin-bottom: 10px;
+}
+
+/* ======================== Recommendation Card ======================== */
+.gs-recommendation {
+  padding: 10px 14px;
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: #166534;
+  margin-bottom: 12px;
+}
+.gs-recommendation strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.gs-warning {
+  padding: 10px 14px;
+  background: #FFF7ED;
+  border: 1px solid #FED7AA;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: #9A3412;
+  margin-bottom: 12px;
+}
+
+/* ======================== Graph Preview Area ======================== */
+.gs-graph-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #E8ECF0;
+  overflow: auto;
+  padding: 24px;
+  min-height: 0;
+}
+.gs-graph-paper {
+  background: white;
+  border: 1px solid var(--color-border-light);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* ======================== Report ======================== */
+.gs-report-block {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.gs-report-header {
+  padding: 12px 16px;
+  background: var(--color-bg-sidebar);
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gs-report-body {
+  padding: 16px;
+}
+.gs-interpretation {
+  padding: 12px 16px;
+  background: #F1F5F9;
+  border-left: 4px solid var(--color-accent-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+}
+
+/* ======================== Table ======================== */
+.gs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.gs-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid var(--color-border-strong);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.gs-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+.gs-table tr:hover td {
+  background: rgba(41, 98, 255, 0.03);
+}
+.gs-table .sig-yes {
+  background: #F0FDF4;
+}
+.gs-table .sig-cell {
+  font-weight: var(--font-weight-bold);
+}
+
+/* ======================== Export ======================== */
+.gs-export-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.gs-export-option {
+  padding: 16px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.gs-export-option:hover {
+  border-color: var(--color-accent-primary);
+  box-shadow: var(--shadow-sm);
+}
+.gs-export-option-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+.gs-export-option-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+/* ======================== Spreadsheet ======================== */
+.gs-spreadsheet {
+  flex: 1;
+  overflow: auto;
+  background: white;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+.gs-spreadsheet table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+.gs-spreadsheet th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #F1F5F9;
+  padding: 6px 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  border-bottom: 2px solid var(--color-border-strong);
+  border-right: 1px solid var(--color-border-light);
+}
+.gs-spreadsheet td {
+  padding: 0;
+  border-bottom: 1px solid var(--color-border-light);
+  border-right: 1px solid var(--color-border-light);
+}
+.gs-spreadsheet .gs-row-num {
+  width: 40px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  background: #F8FAFC;
+  padding: 6px 4px;
+  user-select: none;
+}
+.gs-spreadsheet input {
+  width: 100%;
+  border: none;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: var(--font-family-mono);
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+}
+.gs-spreadsheet input:focus {
+  background: rgba(41, 98, 255, 0.04);
+}
+.gs-spreadsheet input.gs-invalid {
+  color: var(--color-danger);
+}
+.gs-spreadsheet .gs-header-input {
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+}
+
+/* Spreadsheet toolbar */
+.gs-spreadsheet-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--color-border-light);
+  align-items: center;
+}
+.gs-spreadsheet-toolbar .gs-dataset-name {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  margin-right: 8px;
+}
+.gs-spreadsheet-toolbar .gs-format-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(41, 98, 255, 0.1);
+  color: var(--color-accent-primary);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  margin-right: auto;
+}
+
+/* ======================== Annotation Brackets ======================== */
+.gs-annotation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* ======================== Scrollbar Styling ======================== */
+.gs-container ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.gs-container ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gs-container ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+.gs-container ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}

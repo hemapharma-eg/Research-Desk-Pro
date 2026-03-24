@@ -1,150 +1,606 @@
 import { useMemo } from 'react';
-import { 
-  BarChart, Bar, ScatterChart, Scatter, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ErrorBar, Cell, Label
+import {
+  BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ErrorBar,
+  ResponsiveContainer, Cell
 } from 'recharts';
 import type { PublicationDataset, VariableMapping } from '../../types/GraphingCoreTypes';
 import type { GraphStyleOptions } from '../../types/GraphStyleOptions';
-import { getDescriptives } from '../../utils/statService';
-import type { StatTestResult, DescriptiveStats } from '../../utils/statService';
-
-interface AggregatedPoint {
-  name: string;
-  mean: number;
-  error: number;
-  desc: DescriptiveStats;
-}
-
-interface ScatterPoint {
-  name: string;
-  group: string;
-  y: number;
-}
+import type { StatTestResult } from '../../utils/statService';
+import { getDescriptives, cleanData } from '../../utils/statService';
+import { jStat } from 'jstat';
 
 interface AdvancedGraphViewerProps {
   dataset: PublicationDataset;
   mapping: VariableMapping;
   options: GraphStyleOptions;
-  statResult: StatTestResult | null;
+  statResult?: StatTestResult | null;
+}
+
+interface ChartDataPoint {
+  name: string;
+  values: number[];
+  mean: number;
+  median: number;
+  sd: number;
+  sem: number;
+  ci95_lower: number;
+  ci95_upper: number;
+  q1: number;
+  q3: number;
+  min: number;
+  max: number;
+  iqr: number;
+  errorLow: number;
+  errorHigh: number;
 }
 
 export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraphViewerProps) {
-  
-  // Aggregated data for Bar/Line charts
-  const aggregatedData = useMemo((): AggregatedPoint[] => {
-    if (mapping.dependentParamIds.length === 0) return [];
-    const columns = dataset.columns.filter(c => mapping.dependentParamIds.includes(c.id));
-    
-    return columns.map(col => {
-      const rawValues = dataset.rows.map(r => Number(r.cells[col.id]?.[0]?.value)).filter(v => !isNaN(v));
-      const desc = getDescriptives(col.title, rawValues);
-      
-      let errorVal = 0;
-      if (options.errorBarType === 'sd') errorVal = desc.sd;
-      else if (options.errorBarType === 'sem') errorVal = desc.sem;
-      else if (options.errorBarType === 'ci') errorVal = desc.ci95_upper - desc.mean;
-
-      return { name: col.title, mean: desc.mean, error: errorVal, desc };
-    });
+  const chartData = useMemo(() => {
+    return mapping.dependentParamIds.map((colId, idx) => {
+      const col = dataset.columns.find(c => c.id === colId);
+      if (!col) return null;
+      const values = dataset.rows
+        .map(row => {
+          const cells = row.cells[colId];
+          if (!cells || cells.length === 0) return NaN;
+          const val = cells[0]?.value;
+          return typeof val === 'number' ? val : Number(val);
+        })
+        .filter(v => !isNaN(v));
+      const desc = getDescriptives(col.title, values);
+      const clean = cleanData(values);
+      const errorLow = options.errorBarType === 'SD' ? desc.sd : options.errorBarType === 'SEM' ? desc.sem : options.errorBarType === 'CI95' ? (desc.mean - desc.ci95_lower) : 0;
+      const errorHigh = errorLow;
+      return {
+        name: col.title,
+        values: clean,
+        mean: desc.mean,
+        median: desc.median,
+        sd: desc.sd,
+        sem: desc.sem,
+        ci95_lower: desc.ci95_lower,
+        ci95_upper: desc.ci95_upper,
+        q1: desc.q1,
+        q3: desc.q3,
+        min: desc.min,
+        max: desc.max,
+        iqr: desc.iqr,
+        errorLow,
+        errorHigh,
+        _idx: idx,
+      } as ChartDataPoint & { _idx: number };
+    }).filter((d): d is ChartDataPoint & { _idx: number } => d !== null);
   }, [dataset, mapping, options.errorBarType]);
 
-  // Raw point data for Scatter charts
-  const scatterData = useMemo((): ScatterPoint[] => {
-    if (mapping.dependentParamIds.length === 0) return [];
-    const columns = dataset.columns.filter(c => mapping.dependentParamIds.includes(c.id));
-    const points: ScatterPoint[] = [];
-    columns.forEach(col => {
-      dataset.rows.forEach(r => {
-        const val = Number(r.cells[col.id]?.[0]?.value);
-        if (!isNaN(val)) {
-          points.push({ name: col.title, group: col.title, y: val });
-        }
-      });
-    });
-    return points;
-  }, [dataset, mapping]);
-
-  // If no columns mapped
-  if (mapping.dependentParamIds.length === 0) {
+  if (chartData.length === 0) {
     return (
-      <div style={{ padding: '32px', textAlign: 'center', color: '#94A3B8' }}>
-        Please assign Dependent Variables (Y) in the Data Workspace to see the graph.
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)' }}>
+        Map columns to dependent variables to see a graph.
       </div>
     );
   }
 
-  const axisStyle = { fill: '#475569', fontSize: 13 };
-  const yDomain: [string | number, string | number] = 
-    options.yAxisMin !== '' && options.yAxisMax !== '' && options.yAxisMin !== undefined && options.yAxisMax !== undefined 
-      ? [options.yAxisMin, options.yAxisMax] 
-      : ['auto', 'auto'];
+  const { chartType, colorPalette, showGridlines, fontFamily, fontSize, showLegend, legendPosition } = options;
+  const commonAxisProps = {
+    tick: { fontSize, fontFamily, fill: '#333' },
+    tickLine: { stroke: '#999' },
+    axisLine: { stroke: '#666' },
+  };
+  const yDomain: [number | string, number | string] = [options.yAxisMin ?? 'auto', options.yAxisMax ?? 'auto'];
+  const xAngle = options.xAxisTickRotation;
 
-  const renderBarChart = () => (
-    <BarChart data={aggregatedData} margin={{ top: 40, right: 30, left: 20, bottom: 40 }}>
-      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-      <XAxis dataKey="name" axisLine={{ stroke: '#94A3B8' }} tickLine={{ stroke: '#94A3B8' }} tick={axisStyle} dy={10}>
-        {options.xAxisTitle && <Label value={options.xAxisTitle} offset={-20} position="insideBottom" style={{ fill: '#0F172A', fontWeight: 'bold' }} />}
-      </XAxis>
-      <YAxis domain={yDomain} axisLine={{ stroke: '#94A3B8' }} tickLine={{ stroke: '#94A3B8' }} tick={axisStyle}>
-        {options.yAxisTitle && <Label value={options.yAxisTitle} angle={-90} position="insideLeft" style={{ fill: '#0F172A', fontWeight: 'bold' }} />}
-      </YAxis>
-      <Tooltip cursor={{ fill: '#F8FAFC' }} contentStyle={{ borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-      <Bar dataKey="mean" barSize={60}>
-        {aggregatedData.map((_entry, index) => (
-          <Cell key={`cell-${index}`} fill={options.colorPalette[index % options.colorPalette.length]} />
-        ))}
-        {options.errorBarType !== 'none' && (
-          <ErrorBar dataKey="error" width={8} strokeWidth={1.5} stroke="#0F172A" />
-        )}
-      </Bar>
-    </BarChart>
-  );
+  // --- BAR CHARTS (bar, grouped-bar, bar-points) ---
+  if (['bar', 'grouped-bar', 'bar-points', 'stacked-bar', 'stacked-bar-100'].includes(chartType)) {
+    const rechartsData = chartData.map((d, i) => {
+      let eRange = [d.errorLow, d.errorHigh];
+      if (options.errorBarDirection === 'up') eRange = [0, d.errorHigh];
+      if (options.errorBarDirection === 'down') eRange = [d.errorLow, 0];
+      
+      return {
+        name: d.name,
+        value: d.mean,
+        errorRange: eRange,
+        fill: options.customBarColors?.[d.name] || colorPalette[i % colorPalette.length],
+      };
+    });
 
-  const renderLineChart = () => (
-    <LineChart data={aggregatedData} margin={{ top: 40, right: 30, left: 20, bottom: 40 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-      <XAxis dataKey="name" axisLine={{ stroke: '#94A3B8' }} tickLine={{ stroke: '#94A3B8' }} tick={axisStyle} dy={10} />
-      <YAxis domain={yDomain} axisLine={{ stroke: '#94A3B8' }} tickLine={{ stroke: '#94A3B8' }} tick={axisStyle} />
-      <Tooltip contentStyle={{ borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-      <Line type="monotone" dataKey="mean" stroke={options.colorPalette[0]} strokeWidth={3} dot={{ r: 6, fill: options.colorPalette[0], strokeWidth: 2, stroke: 'white' }}>
-        {options.errorBarType !== 'none' && (
-          <ErrorBar dataKey="error" width={6} strokeWidth={1.5} stroke={options.colorPalette[0]} />
-        )}
-      </Line>
-    </LineChart>
-  );
+    const legendPayload = rechartsData.map(d => ({
+      value: d.name,
+      type: 'square' as const,
+      color: d.fill
+    }));
 
-  const renderScatterChart = () => {
-    const uniqueGroups = Array.from(new Set(scatterData.map(d => d.name)));
     return (
-      <ScatterChart margin={{ top: 40, right: 30, left: 20, bottom: 40 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-        <XAxis dataKey="name" type="category" allowDuplicatedCategory={false} axisLine={{ stroke: '#94A3B8' }} tickLine={{ stroke: '#94A3B8' }} tick={axisStyle} dy={10} />
-        <YAxis dataKey="y" type="number" domain={yDomain} axisLine={{ stroke: '#94A3B8' }} tickLine={{ stroke: '#94A3B8' }} tick={axisStyle} />
-        <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-        <Scatter name="Data" data={scatterData} fill={options.colorPalette[0]}>
-          {scatterData.map((point, index) => {
-            const gIndex = uniqueGroups.indexOf(point.name);
-            return <Cell key={`cell-${index}`} fill={options.colorPalette[gIndex % options.colorPalette.length]} />;
-          })}
-        </Scatter>
-      </ScatterChart>
+      <div style={{ width: '100%', height: '100%', fontFamily, padding: '16px' }}>
+        {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', fontFamily, marginBottom: '4px' }}>{options.title}</div>}
+        {options.subtitle && <div style={{ textAlign: 'center', fontSize: fontSize, color: '#666', fontFamily, marginBottom: '8px' }}>{options.subtitle}</div>}
+        <ResponsiveContainer width="100%" height="85%">
+          <BarChart data={rechartsData} margin={{ top: 20, right: 30, left: 20, bottom: xAngle ? 40 : 20 }} barCategoryGap={`${(1 - options.barWidth) * 50}%`}>
+            {showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
+            <XAxis dataKey="name" label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom', offset: xAngle ? 20 : 0, style: { fontSize, fontFamily } } : undefined} angle={xAngle} textAnchor={xAngle ? 'end' : 'middle'} {...commonAxisProps} />
+            <YAxis domain={yDomain} scale={options.yAxisLogScale ? 'log' : 'auto'} label={options.yAxisLabel ? { value: options.yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize, fontFamily } } : undefined} {...commonAxisProps} />
+            <Tooltip />
+            {showLegend && (
+              <Legend 
+                verticalAlign={legendPosition === 'bottom' ? 'bottom' : 'top'} 
+                align={legendPosition === 'left' ? 'left' : legendPosition === 'right' ? 'right' : 'center'} 
+                content={(props) => {
+                  const { align } = props;
+                  return (
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', gap: '16px', justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center', fontSize: '12px' }}>
+                      {legendPayload.map((entry, index) => (
+                        <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: entry.color, borderRadius: '2px' }} />
+                          <span style={{ color: 'var(--color-text-secondary)' }}>{entry.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                }}
+              />
+            )}
+            <Bar dataKey="value" name="Mean" fillOpacity={options.barOpacity} radius={[2, 2, 0, 0]}>
+              {rechartsData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+              {options.errorBarType !== 'none' && (
+                <ErrorBar dataKey="errorRange" width={options.errorBarCapWidth} strokeWidth={1.5} stroke="#333" />
+              )}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        {/* Overlay individual points for bar-points */}
+        {(chartType === 'bar-points' || options.showPoints) && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+            {/* Individual points are approximated via SVG overlay */}
+            <svg style={{ width: '100%', height: '100%' }}>
+              {chartData.map((group, gi) => {
+                const barAreaWidth = 0.7;
+                const totalPlotWidth = 0.8;
+                const xCenter = ((gi + 0.5) / chartData.length) * totalPlotWidth * 100 + 10;
+                return group.values.map((v, vi) => {
+                  const jitter = (Math.random() - 0.5) * barAreaWidth * 8;
+                  const yMax = Math.max(...chartData.flatMap(d => d.values));
+                  const yFrac = yMax > 0 ? (1 - v / (yMax * 1.2)) * 75 + 10 : 50;
+                  return (
+                    <circle
+                      key={`pt-${gi}-${vi}`}
+                      cx={`${xCenter + jitter}%`}
+                      cy={`${yFrac}%`}
+                      r={options.pointSize / 2}
+                      fill={options.customPointColors?.[group.name] || colorPalette[gi % colorPalette.length]}
+                      opacity={options.pointOpacity}
+                      stroke="white"
+                      strokeWidth="0.5"
+                    />
+                  );
+                });
+              })}
+            </svg>
+          </div>
+        )}
+      </div>
     );
+  }
+
+  // --- LINE CHARTS (line, grouped-line) ---
+  if (['line', 'grouped-line'].includes(chartType)) {
+    const lineData = chartData[0]?.values.map((_, rowIdx) => {
+      const point: Record<string, number | string> = { name: `${rowIdx + 1}` };
+      chartData.forEach(g => { point[g.name] = g.values[rowIdx] ?? 0; });
+      return point;
+    }) || [];
+
+    return (
+      <div style={{ width: '100%', height: '100%', fontFamily, padding: '16px' }}>
+        {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', fontFamily, marginBottom: '4px' }}>{options.title}</div>}
+        <ResponsiveContainer width="100%" height="90%">
+          <LineChart data={lineData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            {showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
+            <XAxis dataKey="name" label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom', style: { fontSize, fontFamily } } : undefined} {...commonAxisProps} />
+            <YAxis domain={yDomain} label={options.yAxisLabel ? { value: options.yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize, fontFamily } } : undefined} {...commonAxisProps} />
+            <Tooltip />
+            {showLegend && <Legend />}
+            {chartData.map((g, i) => (
+              <Line key={g.name} type="monotone" dataKey={g.name} stroke={colorPalette[i % colorPalette.length]}
+                strokeWidth={options.lineThickness}
+                strokeDasharray={options.lineStyle === 'dashed' ? '8 4' : options.lineStyle === 'dotted' ? '2 4' : undefined}
+                dot={options.showPoints ? { r: options.pointSize / 2, fill: colorPalette[i % colorPalette.length] } : false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // --- SCATTER (scatter, scatter-fit, dose-response) ---
+  if (['scatter', 'scatter-fit', 'dose-response'].includes(chartType)) {
+    const len = Math.min(chartData[0]?.values.length || 0, chartData[1]?.values.length || 0);
+    const scatterData = Array.from({ length: len }, (_, i) => ({
+      x: chartData[0]?.values[i] ?? 0,
+      y: chartData[1]?.values[i] ?? 0,
+    }));
+
+    const xs = scatterData.map(d => d.x);
+    const ys = scatterData.map(d => d.y);
+    const xMin = xs.length ? Math.min(...xs) : 0, xMax = xs.length ? Math.max(...xs) : 1;
+    const yMin = ys.length ? Math.min(...ys) : 0, yMax = ys.length ? Math.max(...ys) : 1;
+
+    // Compute regression line for scatter-fit
+    let fitLine: { x1: number; y1: number; x2: number; y2: number } | null = null;
+    let sigmoidCurve: { x: number; y: number }[] | null = null;
+
+    if (chartType === 'scatter-fit' && scatterData.length > 2) {
+      const meanX = jStat.mean(xs), meanY = jStat.mean(ys);
+      let ssxy = 0, ssxx = 0;
+      for (let i = 0; i < xs.length; i++) {
+        ssxy += (xs[i] - meanX) * (ys[i] - meanY);
+        ssxx += (xs[i] - meanX) ** 2;
+      }
+      const slope = ssxx > 0 ? ssxy / ssxx : 0;
+      const intercept = meanY - slope * meanX;
+      fitLine = { x1: xMin, y1: intercept + slope * xMin, x2: xMax, y2: intercept + slope * xMax };
+    } else if (chartType === 'dose-response' && scatterData.length > 2) {
+      // Placeholder sigmoidal curve: Y = Bottom + (Top-Bottom)/(1+10^((LogEC50-X)*HillSlope))
+      const top = yMax;
+      const bottom = yMin;
+      const logEC50 = (xMax + xMin) / 2;
+      const hillSlope = 1.0; // Assume standard slope
+      sigmoidCurve = [];
+      const steps = 100;
+      for (let i = 0; i <= steps; i++) {
+        const xPos = xMin + (xMax - xMin) * (i / steps);
+        // Logistic growth (pseudo-sigmoid since X might not be log-transformed)
+        const denominator = 1 + Math.pow(10, (logEC50 - xPos) * hillSlope);
+        const yPos = bottom + (top - bottom) / denominator;
+        sigmoidCurve.push({ x: xPos, y: yPos });
+      }
+    }
+
+    return (
+      <div style={{ width: '100%', height: '100%', fontFamily, padding: '16px', position: 'relative' }}>
+        {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', fontFamily, marginBottom: '4px' }}>{options.title}</div>}
+        <ResponsiveContainer width="100%" height="90%">
+          <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            {showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
+            <XAxis dataKey="x" type="number" name={chartData[0]?.name || 'X'} domain={['auto', 'auto']}
+              label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom', style: { fontSize, fontFamily } } : undefined}
+              {...commonAxisProps} />
+            <YAxis dataKey="y" type="number" name={chartData[1]?.name || 'Y'} domain={yDomain}
+              label={options.yAxisLabel ? { value: options.yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize, fontFamily } } : undefined}
+              {...commonAxisProps} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+            {showLegend && <Legend />}
+            
+            {/* Draw Sigmoidal overlay as an invisible line so it takes coordinate space correctly using Recharts Line. Wait, ScatterChart doesn't easily support Line overlay with math curve, but we can fake it by adding a second scatter dataset and using a continuous line! */}
+            {chartType === 'dose-response' && sigmoidCurve && (
+               <Scatter name="Fitted Curve" data={sigmoidCurve} line={{ stroke: '#f5222d', strokeWidth: 2 }} shape={<></>} isAnimationActive={false} />
+            )}
+
+            <Scatter name="Data" data={scatterData} fill={colorPalette[0]}>
+              {scatterData.map((_, idx) => (
+                <Cell key={idx} fill={colorPalette[0]} opacity={options.pointOpacity} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+        {/* Fit line overlay (SVG absolute) was previously here, but Recharts handles line overlays natively via `<Scatter line />` */}
+        {fitLine && (
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#666', background: 'rgba(255,255,255,0.8)', padding: '2px 4px', borderRadius: '4px' }}>Linear Fit: y = {((fitLine.y2 - fitLine.y1) / (fitLine.x2 - fitLine.x1) || 0).toFixed(2)}x + {(fitLine.y1 - ((fitLine.y2 - fitLine.y1) / (fitLine.x2 - fitLine.x1) || 0) * fitLine.x1).toFixed(2)}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- BOX PLOT (Custom SVG) ---
+  if (['box', 'box-points'].includes(chartType)) {
+    return renderBoxPlot(chartData, options, colorPalette, chartType === 'box-points');
+  }
+
+  // --- VIOLIN PLOT (Custom SVG with KDE) ---
+  if (['violin', 'violin-points'].includes(chartType)) {
+    return renderViolinPlot(chartData, options, colorPalette, chartType === 'violin-points');
+  }
+
+  // --- HISTOGRAM ---
+  if (chartType === 'histogram') {
+    return renderHistogram(chartData, options, colorPalette);
+  }
+
+  // --- BEFORE-AFTER & SLOPE GRAPH ---
+  if (['before-after', 'slope-graph'].includes(chartType)) {
+    return renderBeforeAfter(chartData, options, colorPalette);
+  }
+
+  // --- DOT PLOT / STRIP PLOT ---
+  if (['dot-plot', 'strip-plot'].includes(chartType)) {
+    return renderStripPlot(chartData, options, colorPalette, chartType === 'strip-plot');
+  }
+
+  // Fallback : bar chart
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)' }}>
+      Chart type "{chartType}" rendering not yet available.
+    </div>
+  );
+}
+
+// ========== Custom Renderers ==========
+
+function renderBoxPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], showPoints: boolean) {
+  const padding = { top: 60, right: 40, bottom: 50, left: 60 };
+  const totalW = 800, totalH = 500;
+  const plotW = totalW - padding.left - padding.right;
+  const plotH = totalH - padding.top - padding.bottom;
+
+  const yMin = Math.min(...data.map(d => d.min));
+  const yMax = Math.max(...data.map(d => d.max));
+  const yRange = yMax - yMin || 1;
+  const yPadded = yRange * 0.1;
+  const yBottom = yMin - yPadded, yTop = yMax + yPadded;
+
+  const toY = (v: number) => padding.top + plotH * (1 - (v - yBottom) / (yTop - yBottom));
+  const barW = Math.min(60, plotW / data.length * 0.6);
+
+  return (
+    <div style={{ width: '100%', height: '100%', fontFamily: options.fontFamily }}>
+      {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', marginBottom: 4 }}>{options.title}</div>}
+      <svg width="100%" height="100%" viewBox={`0 0 ${totalW} ${totalH}`}>
+        {/* Grid */}
+        {options.showGridlines && Array.from({ length: 6 }, (_, i) => {
+          const y = padding.top + (plotH / 5) * i;
+          return <line key={i} x1={padding.left} y1={y} x2={totalW - padding.right} y2={y} stroke="#E5E7EB" />;
+        })}
+        {/* Y axis */}
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={totalH - padding.bottom} stroke="#666" />
+        {Array.from({ length: 6 }, (_, i) => {
+          const val = yBottom + ((yTop - yBottom) / 5) * (5 - i);
+          const y = padding.top + (plotH / 5) * i;
+          return <text key={i} x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#666">{val.toFixed(1)}</text>;
+        })}
+        {options.yAxisLabel && <text x={15} y={totalH / 2} transform={`rotate(-90, 15, ${totalH / 2})`} textAnchor="middle" fontSize="12" fill="#333">{options.yAxisLabel}</text>}
+
+        {/* Boxes */}
+        {data.map((d, i) => {
+          const cx = padding.left + (plotW / data.length) * (i + 0.5);
+          const q1Y = toY(d.q1), q3Y = toY(d.q3), medY = toY(d.median);
+          const whiskerLow = toY(Math.max(d.min, d.q1 - 1.5 * d.iqr));
+          const whiskerHigh = toY(Math.min(d.max, d.q3 + 1.5 * d.iqr));
+          const fill = palette[i % palette.length];
+
+          return (
+            <g key={i}>
+              {/* Whiskers */}
+              <line x1={cx} y1={whiskerHigh} x2={cx} y2={q3Y} stroke="#333" strokeWidth="1" />
+              <line x1={cx} y1={q1Y} x2={cx} y2={whiskerLow} stroke="#333" strokeWidth="1" />
+              <line x1={cx - barW * 0.3} y1={whiskerHigh} x2={cx + barW * 0.3} y2={whiskerHigh} stroke="#333" strokeWidth="1" />
+              <line x1={cx - barW * 0.3} y1={whiskerLow} x2={cx + barW * 0.3} y2={whiskerLow} stroke="#333" strokeWidth="1" />
+              {/* Box */}
+              <rect x={cx - barW / 2} y={q3Y} width={barW} height={q1Y - q3Y} fill={fill} fillOpacity={options.barOpacity} stroke="#333" strokeWidth="1" />
+              {/* Median */}
+              <line x1={cx - barW / 2} y1={medY} x2={cx + barW / 2} y2={medY} stroke="#333" strokeWidth="2" />
+              {/* Label */}
+              <text x={cx} y={totalH - padding.bottom + 20} textAnchor="middle" fontSize="12" fill="#333">{d.name}</text>
+
+              {/* Individual points */}
+              {showPoints && d.values.map((v, vi) => (
+                <circle key={vi} cx={cx + (Math.random() - 0.5) * barW * 0.6} cy={toY(v)} r={options.pointSize / 2} fill={fill} opacity={options.pointOpacity} stroke="white" strokeWidth="0.5" />
+              ))}
+
+              {/* Outliers */}
+              {d.values.filter(v => v < d.q1 - 1.5 * d.iqr || v > d.q3 + 1.5 * d.iqr).map((v, oi) => (
+                <circle key={`o-${oi}`} cx={cx} cy={toY(v)} r="3" fill="none" stroke="#333" strokeWidth="1" />
+              ))}
+            </g>
+          );
+        })}
+
+        {options.xAxisLabel && <text x={totalW / 2} y={totalH - 5} textAnchor="middle" fontSize="12" fill="#333">{options.xAxisLabel}</text>}
+      </svg>
+    </div>
+  );
+}
+
+function renderViolinPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], showPoints: boolean) {
+  const padding = { top: 60, right: 40, bottom: 50, left: 60 };
+  const totalW = 800, totalH = 500;
+  const plotW = totalW - padding.left - padding.right;
+  const plotH = totalH - padding.top - padding.bottom;
+
+  const yMin = Math.min(...data.map(d => d.min));
+  const yMax = Math.max(...data.map(d => d.max));
+  const yRange = yMax - yMin || 1;
+  const yPadded = yRange * 0.1;
+  const yBottom = yMin - yPadded, yTop = yMax + yPadded;
+  const toY = (v: number) => padding.top + plotH * (1 - (v - yBottom) / (yTop - yBottom));
+  const maxW = Math.min(80, plotW / data.length * 0.7);
+
+  // KDE function
+  const kde = (values: number[], bandwidth: number, nPoints: number = 50): { y: number; density: number }[] => {
+    const min = Math.min(...values), max = Math.max(...values);
+    const step = (max - min) / nPoints;
+    return Array.from({ length: nPoints + 1 }, (_, i) => {
+      const y = min + step * i;
+      let density = 0;
+      values.forEach(v => {
+        const u = (y - v) / bandwidth;
+        density += Math.exp(-0.5 * u * u) / (bandwidth * Math.sqrt(2 * Math.PI));
+      });
+      density /= values.length;
+      return { y, density };
+    });
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-      <h2 style={{ textAlign: 'center', margin: '16px 0 0 0', fontSize: '18px', color: '#0F172A', fontWeight: 'bold' }}>
-        {options.chartTitle}
-      </h2>
-      
-      <div style={{ flex: 1, padding: '16px', minHeight: '400px' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          {options.chartType === 'bar' ? renderBarChart()
-           : options.chartType === 'line' ? renderLineChart()
-           : renderScatterChart()}
-        </ResponsiveContainer>
-      </div>
+    <div style={{ width: '100%', height: '100%', fontFamily: options.fontFamily }}>
+      {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', marginBottom: 4 }}>{options.title}</div>}
+      <svg width="100%" height="100%" viewBox={`0 0 ${totalW} ${totalH}`}>
+        {options.showGridlines && Array.from({ length: 6 }, (_, i) => {
+          const y = padding.top + (plotH / 5) * i;
+          return <line key={i} x1={padding.left} y1={y} x2={totalW - padding.right} y2={y} stroke="#E5E7EB" />;
+        })}
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={totalH - padding.bottom} stroke="#666" />
+        {Array.from({ length: 6 }, (_, i) => {
+          const val = yBottom + ((yTop - yBottom) / 5) * (5 - i);
+          const y = padding.top + (plotH / 5) * i;
+          return <text key={i} x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#666">{val.toFixed(1)}</text>;
+        })}
+
+        {data.map((d, i) => {
+          const cx = padding.left + (plotW / data.length) * (i + 0.5);
+          const fill = palette[i % palette.length];
+          const bw = d.sd * 0.4 || 0.5;
+          const kdeData = kde(d.values, bw);
+          const maxDensity = Math.max(...kdeData.map(k => k.density)) || 1;
+
+          // Build polygon path
+          const leftPath = kdeData.map(k => `${cx - (k.density / maxDensity) * maxW / 2},${toY(k.y)}`).join(' ');
+          const rightPath = [...kdeData].reverse().map(k => `${cx + (k.density / maxDensity) * maxW / 2},${toY(k.y)}`).join(' ');
+
+          return (
+            <g key={i}>
+              <polygon points={`${leftPath} ${rightPath}`} fill={fill} fillOpacity={options.barOpacity} stroke={fill} strokeWidth="1" />
+              {/* Median + quartile lines inside violin */}
+              <line x1={cx - maxW * 0.15} y1={toY(d.median)} x2={cx + maxW * 0.15} y2={toY(d.median)} stroke="#333" strokeWidth="2" />
+              <line x1={cx} y1={toY(d.q1)} x2={cx} y2={toY(d.q3)} stroke="#333" strokeWidth="3" />
+              {/* Individual points */}
+              {showPoints && d.values.map((v, vi) => (
+                <circle key={vi} cx={cx + (Math.random() - 0.5) * maxW * 0.3} cy={toY(v)} r={options.pointSize / 2} fill="white" opacity={options.pointOpacity} stroke={fill} strokeWidth="1" />
+              ))}
+              <text x={cx} y={totalH - padding.bottom + 20} textAnchor="middle" fontSize="12" fill="#333">{d.name}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function renderHistogram(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[]) {
+  // Use first group only
+  const values = data[0]?.values || [];
+  if (values.length === 0) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>No data for histogram.</div>;
+
+  const nBins = Math.max(5, Math.ceil(Math.sqrt(values.length)));
+  const min = Math.min(...values), max = Math.max(...values);
+  const binWidth = (max - min) / nBins || 1;
+  const bins: { x: number; count: number }[] = [];
+  for (let i = 0; i < nBins; i++) {
+    const lo = min + i * binWidth;
+    const hi = lo + binWidth;
+    const count = values.filter(v => i === nBins - 1 ? (v >= lo && v <= hi) : (v >= lo && v < hi)).length;
+    bins.push({ x: lo, count });
+  }
+
+  const rechartsData = bins.map(b => ({
+    name: `${b.x.toFixed(1)}`,
+    count: b.count,
+  }));
+
+  return (
+    <div style={{ width: '100%', height: '100%', fontFamily: options.fontFamily, padding: '16px' }}>
+      {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', marginBottom: 4 }}>{options.title}</div>}
+      <ResponsiveContainer width="100%" height="90%">
+        <BarChart data={rechartsData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }} barCategoryGap="0%">
+          {options.showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
+          <XAxis dataKey="name" label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom' } : undefined} />
+          <YAxis label={options.yAxisLabel ? { value: options.yAxisLabel || 'Frequency', angle: -90, position: 'insideLeft' } : { value: 'Frequency', angle: -90, position: 'insideLeft' }} />
+          <Tooltip />
+          <Bar dataKey="count" fill={palette[0]} fillOpacity={options.barOpacity} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function renderBeforeAfter(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[]) {
+  if (data.length < 2) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Need at least 2 groups for before–after plot.</div>;
+  const n = Math.min(data[0].values.length, data[1].values.length);
+  const padding = { top: 60, right: 60, bottom: 50, left: 60 };
+  const totalW = 800, totalH = 500;
+  const plotW = totalW - padding.left - padding.right;
+  const plotH = totalH - padding.top - padding.bottom;
+  const allVals = [...data[0].values, ...data[1].values];
+  const yMin = Math.min(...allVals), yMax = Math.max(...allVals);
+  const yRange = yMax - yMin || 1;
+  const yBottom = yMin - yRange * 0.1, yTop = yMax + yRange * 0.1;
+  const toY = (v: number) => padding.top + plotH * (1 - (v - yBottom) / (yTop - yBottom));
+  const x1 = padding.left + plotW * 0.25;
+  const x2 = padding.left + plotW * 0.75;
+
+  return (
+    <div style={{ width: '100%', height: '100%', fontFamily: options.fontFamily }}>
+      {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', marginBottom: 4 }}>{options.title}</div>}
+      <svg width="100%" height="100%" viewBox={`0 0 ${totalW} ${totalH}`}>
+        {options.showGridlines && Array.from({ length: 6 }, (_, i) => {
+          const y = padding.top + (plotH / 5) * i;
+          return <line key={i} x1={padding.left} y1={y} x2={totalW - padding.right} y2={y} stroke="#E5E7EB" />;
+        })}
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={totalH - padding.bottom} stroke="#666" />
+        {Array.from({ length: n }, (_, i) => {
+          const color = data[0].values[i] <= data[1].values[i] ? '#16A34A' : '#DC2626';
+          return (
+            <g key={i}>
+              <line x1={x1} y1={toY(data[0].values[i])} x2={x2} y2={toY(data[1].values[i])} stroke={color} strokeWidth={options.lineThickness} opacity={0.6} />
+              <circle cx={x1} cy={toY(data[0].values[i])} r={options.pointSize} fill={palette[0]} stroke="white" strokeWidth="1" />
+              <circle cx={x2} cy={toY(data[1].values[i])} r={options.pointSize} fill={palette[1]} stroke="white" strokeWidth="1" />
+            </g>
+          );
+        })}
+        <text x={x1} y={totalH - padding.bottom + 20} textAnchor="middle" fontSize="12" fill="#333">{data[0].name}</text>
+        <text x={x2} y={totalH - padding.bottom + 20} textAnchor="middle" fontSize="12" fill="#333">{data[1].name}</text>
+      </svg>
+    </div>
+  );
+}
+
+function renderStripPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], jitter: boolean) {
+  const padding = { top: 60, right: 40, bottom: 50, left: 60 };
+  const totalW = 800, totalH = 500;
+  const plotW = totalW - padding.left - padding.right;
+  const plotH = totalH - padding.top - padding.bottom;
+  const allVals = data.flatMap(d => d.values);
+  const yMin = Math.min(...allVals), yMax = Math.max(...allVals);
+  const yRange = yMax - yMin || 1;
+  const yBottom = yMin - yRange * 0.1, yTop = yMax + yRange * 0.1;
+  const toY = (v: number) => padding.top + plotH * (1 - (v - yBottom) / (yTop - yBottom));
+
+  return (
+    <div style={{ width: '100%', height: '100%', fontFamily: options.fontFamily }}>
+      {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', marginBottom: 4 }}>{options.title}</div>}
+      <svg width="100%" height="100%" viewBox={`0 0 ${totalW} ${totalH}`}>
+        {options.showGridlines && Array.from({ length: 6 }, (_, i) => {
+          const y = padding.top + (plotH / 5) * i;
+          return <line key={i} x1={padding.left} y1={y} x2={totalW - padding.right} y2={y} stroke="#E5E7EB" />;
+        })}
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={totalH - padding.bottom} stroke="#666" />
+        {Array.from({ length: 6 }, (_, i) => {
+          const val = yBottom + ((yTop - yBottom) / 5) * (5 - i);
+          const y = padding.top + (plotH / 5) * i;
+          return <text key={i} x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#666">{val.toFixed(1)}</text>;
+        })}
+
+        {data.map((d, gi) => {
+          const cx = padding.left + (plotW / data.length) * (gi + 0.5);
+          const fill = palette[gi % palette.length];
+          const spread = jitter ? 20 : 0;
+          return (
+            <g key={gi}>
+              {/* Mean line */}
+              <line x1={cx - 20} y1={toY(d.mean)} x2={cx + 20} y2={toY(d.mean)} stroke="#333" strokeWidth="2" />
+              {/* Points */}
+              {d.values.map((v, vi) => (
+                <circle key={vi} cx={cx + (jitter ? (Math.random() - 0.5) * spread : 0)} cy={toY(v)} r={options.pointSize} fill={fill} opacity={options.pointOpacity} stroke="white" strokeWidth="0.5" />
+              ))}
+              <text x={cx} y={totalH - padding.bottom + 20} textAnchor="middle" fontSize="12" fill="#333">{d.name}</text>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }

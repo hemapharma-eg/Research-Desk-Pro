@@ -456,3 +456,178 @@ ipcMain.handle('document:exportDocx', async (event, html, defaultTitle = 'Docume
     return { success: false, error: error.message };
   }
 });
+
+// --- Graphing Studio: Datasets ---
+ipcMain.handle('graphing:getDatasets', async () => {
+  try {
+    const datasets = dbManager.getGraphingDatasets();
+    return { success: true, data: datasets };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:getDataset', async (event, id) => {
+  try {
+    const dataset = dbManager.getGraphingDataset(id);
+    return { success: true, data: dataset };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:createDataset', async (event, data) => {
+  try {
+    const dataset = dbManager.createGraphingDataset(data);
+    return { success: true, data: dataset };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:updateDataset', async (event, id, updates) => {
+  try {
+    const dataset = dbManager.updateGraphingDataset(id, updates);
+    return { success: true, data: dataset };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:deleteDataset', async (event, id) => {
+  try {
+    dbManager.deleteGraphingDataset(id);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// --- Graphing Studio: Analyses ---
+ipcMain.handle('graphing:getAnalyses', async (event, datasetId) => {
+  try {
+    const analyses = dbManager.getGraphingAnalyses(datasetId);
+    return { success: true, data: analyses };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:createAnalysis', async (event, data) => {
+  try {
+    const analysis = dbManager.createGraphingAnalysis(data);
+    return { success: true, data: analysis };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:deleteAnalysis', async (event, id) => {
+  try {
+    dbManager.deleteGraphingAnalysis(id);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// --- Graphing Studio: Figures ---
+ipcMain.handle('graphing:getFigures', async (event, datasetId) => {
+  try {
+    const figures = dbManager.getGraphingFigures(datasetId);
+    return { success: true, data: figures };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:getFigure', async (event, id) => {
+  try {
+    const figure = dbManager.getGraphingFigure(id);
+    return { success: true, data: figure };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:createFigure', async (event, data) => {
+  try {
+    const figure = dbManager.createGraphingFigure(data);
+    return { success: true, data: figure };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:updateFigure', async (event, id, updates) => {
+  try {
+    const figure = dbManager.updateGraphingFigure(id, updates);
+    return { success: true, data: figure };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('graphing:deleteFigure', async (event, id) => {
+  try {
+    dbManager.deleteGraphingFigure(id);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// --- Graphing Studio: Export Figure to File ---
+ipcMain.handle('graphing:exportFigure', async (event, imageDataUrl, defaultName, format) => {
+  try {
+    const filters = [];
+    if (format === 'png') filters.push({ name: 'PNG Image', extensions: ['png'] });
+    else if (format === 'svg') filters.push({ name: 'SVG Image', extensions: ['svg'] });
+    else if (format === 'tiff') filters.push({ name: 'TIFF Image', extensions: ['tiff', 'tif'] });
+    else if (format === 'pdf') filters.push({ name: 'PDF Document', extensions: ['pdf'] });
+    else filters.push({ name: 'Image', extensions: ['png'] });
+
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export Figure',
+      defaultPath: `${defaultName || 'Figure'}.${format || 'png'}`,
+      filters
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    // imageDataUrl is a data:image/* base64 string
+    const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
+    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Export Figure Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// --- Graphing: Import CSV/TSV file ---
+ipcMain.handle('graphing:importCSVFile', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import Data File',
+      filters: [
+        { name: 'Data Files', extensions: ['csv', 'tsv', 'txt'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const filePath = filePaths[0];
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const fileName = path.basename(filePath, path.extname(filePath));
+
+    return { success: true, data: { content, fileName, filePath } };
+  } catch (error) {
+    console.error('Import CSV Error:', error);
+    return { success: false, error: error.message };
+  }
+});

@@ -2,7 +2,7 @@
  * Core Types for the Publication Graphing and Statistical Analysis Studio
  */
 
-export type TableFormat = 'column' | 'grouped' | 'xy' | 'contingency' | 'survival' | 'parts-of-whole';
+export type TableFormat = 'column' | 'grouped' | 'xy' | 'paired' | 'contingency' | 'survival' | 'parts-of-whole';
 
 export interface DataColumn {
   id: string; // Unique ID for column e.g. "col-1"
@@ -34,6 +34,8 @@ export interface PublicationDataset {
     createdAt: number;
     updatedAt: number;
     notes?: string;
+    options?: any; // Contains GraphStyleOptions
+    assemblerState?: any; // Contains AssemblerState
   };
 }
 

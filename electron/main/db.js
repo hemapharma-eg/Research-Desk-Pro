@@ -70,6 +70,43 @@ function initDatabase(projectPath) {
         folder_id TEXT,
         PRIMARY KEY(ref_id, folder_id)
       );
+
+      CREATE TABLE IF NOT EXISTS graphing_datasets (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        format TEXT NOT NULL DEFAULT 'column',
+        columns_json TEXT,
+        rows_json TEXT,
+        metadata_json TEXT,
+        variable_mapping_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS graphing_analyses (
+        id TEXT PRIMARY KEY,
+        dataset_id TEXT NOT NULL,
+        test_name TEXT NOT NULL,
+        config_json TEXT,
+        result_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (dataset_id) REFERENCES graphing_datasets(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS graphing_figures (
+        id TEXT PRIMARY KEY,
+        dataset_id TEXT,
+        analysis_id TEXT,
+        name TEXT NOT NULL,
+        graph_type TEXT NOT NULL DEFAULT 'bar',
+        options_json TEXT,
+        annotation_json TEXT,
+        thumbnail_dataurl TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (dataset_id) REFERENCES graphing_datasets(id) ON DELETE SET NULL,
+        FOREIGN KEY (analysis_id) REFERENCES graphing_analyses(id) ON DELETE SET NULL
+      );
     `);
 
     // Migration: Ensure new columns exist for older projects
@@ -288,6 +325,140 @@ function deleteDocument(id) {
   return { success: true };
 }
 
+// === GRAPHING DATASETS ===
+
+function getGraphingDatasets() {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT id, name, format, variable_mapping_json, metadata_json, created_at, updated_at FROM graphing_datasets ORDER BY updated_at DESC`).all();
+}
+
+function getGraphingDataset(id) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM graphing_datasets WHERE id = ?`).get(id);
+}
+
+function createGraphingDataset(data) {
+  const dbInst = getDb();
+  const id = crypto.randomUUID();
+  const stmt = dbInst.prepare(`
+    INSERT INTO graphing_datasets (id, name, format, columns_json, rows_json, metadata_json, variable_mapping_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  stmt.run(id, data.name || 'Untitled Dataset', data.format || 'column',
+    data.columns_json || '[]', data.rows_json || '[]',
+    data.metadata_json || '{}', data.variable_mapping_json || '{}');
+  return getGraphingDataset(id);
+}
+
+function updateGraphingDataset(id, updates) {
+  const dbInst = getDb();
+  const current = getGraphingDataset(id);
+  if (!current) throw new Error('Graphing dataset not found');
+
+  const name = updates.name !== undefined ? updates.name : current.name;
+  const format = updates.format !== undefined ? updates.format : current.format;
+  const columns_json = updates.columns_json !== undefined ? updates.columns_json : current.columns_json;
+  const rows_json = updates.rows_json !== undefined ? updates.rows_json : current.rows_json;
+  const metadata_json = updates.metadata_json !== undefined ? updates.metadata_json : current.metadata_json;
+  const variable_mapping_json = updates.variable_mapping_json !== undefined ? updates.variable_mapping_json : current.variable_mapping_json;
+
+  dbInst.prepare(`
+    UPDATE graphing_datasets
+    SET name = ?, format = ?, columns_json = ?, rows_json = ?, metadata_json = ?, variable_mapping_json = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(name, format, columns_json, rows_json, metadata_json, variable_mapping_json, id);
+  return getGraphingDataset(id);
+}
+
+function deleteGraphingDataset(id) {
+  const dbInst = getDb();
+  // Cascade: delete related analyses and figures
+  dbInst.prepare(`DELETE FROM graphing_analyses WHERE dataset_id = ?`).run(id);
+  dbInst.prepare(`DELETE FROM graphing_figures WHERE dataset_id = ?`).run(id);
+  dbInst.prepare(`DELETE FROM graphing_datasets WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+// === GRAPHING ANALYSES ===
+
+function getGraphingAnalyses(datasetId) {
+  const dbInst = getDb();
+  if (datasetId) {
+    return dbInst.prepare(`SELECT * FROM graphing_analyses WHERE dataset_id = ? ORDER BY created_at DESC`).all(datasetId);
+  }
+  return dbInst.prepare(`SELECT * FROM graphing_analyses ORDER BY created_at DESC`).all();
+}
+
+function createGraphingAnalysis(data) {
+  const dbInst = getDb();
+  const id = crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT INTO graphing_analyses (id, dataset_id, test_name, config_json, result_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, data.dataset_id, data.test_name || 'Unknown', data.config_json || '{}', data.result_json || '{}');
+  return dbInst.prepare(`SELECT * FROM graphing_analyses WHERE id = ?`).get(id);
+}
+
+function deleteGraphingAnalysis(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM graphing_analyses WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+// === GRAPHING FIGURES ===
+
+function getGraphingFigures(datasetId) {
+  const dbInst = getDb();
+  if (datasetId) {
+    return dbInst.prepare(`SELECT * FROM graphing_figures WHERE dataset_id = ? ORDER BY updated_at DESC`).all(datasetId);
+  }
+  return dbInst.prepare(`SELECT * FROM graphing_figures ORDER BY updated_at DESC`).all();
+}
+
+function getGraphingFigure(id) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM graphing_figures WHERE id = ?`).get(id);
+}
+
+function createGraphingFigure(data) {
+  const dbInst = getDb();
+  const id = crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT INTO graphing_figures (id, dataset_id, analysis_id, name, graph_type, options_json, annotation_json, thumbnail_dataurl)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.dataset_id || null, data.analysis_id || null,
+    data.name || 'Untitled Figure', data.graph_type || 'bar',
+    data.options_json || '{}', data.annotation_json || '{}', data.thumbnail_dataurl || null);
+  return getGraphingFigure(id);
+}
+
+function updateGraphingFigure(id, updates) {
+  const dbInst = getDb();
+  const current = getGraphingFigure(id);
+  if (!current) throw new Error('Graphing figure not found');
+
+  const name = updates.name !== undefined ? updates.name : current.name;
+  const dataset_id = updates.dataset_id !== undefined ? updates.dataset_id : current.dataset_id;
+  const analysis_id = updates.analysis_id !== undefined ? updates.analysis_id : current.analysis_id;
+  const graph_type = updates.graph_type !== undefined ? updates.graph_type : current.graph_type;
+  const options_json = updates.options_json !== undefined ? updates.options_json : current.options_json;
+  const annotation_json = updates.annotation_json !== undefined ? updates.annotation_json : current.annotation_json;
+  const thumbnail_dataurl = updates.thumbnail_dataurl !== undefined ? updates.thumbnail_dataurl : current.thumbnail_dataurl;
+
+  dbInst.prepare(`
+    UPDATE graphing_figures
+    SET name = ?, dataset_id = ?, analysis_id = ?, graph_type = ?, options_json = ?, annotation_json = ?, thumbnail_dataurl = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(name, dataset_id, analysis_id, graph_type, options_json, annotation_json, thumbnail_dataurl, id);
+  return getGraphingFigure(id);
+}
+
+function deleteGraphingFigure(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM graphing_figures WHERE id = ?`).run(id);
+  return { success: true };
+}
+
 module.exports = {
   initDatabase,
   getDb,
@@ -314,5 +485,21 @@ module.exports = {
   getDocument,
   createDocument,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+
+  getGraphingDatasets,
+  getGraphingDataset,
+  createGraphingDataset,
+  updateGraphingDataset,
+  deleteGraphingDataset,
+
+  getGraphingAnalyses,
+  createGraphingAnalysis,
+  deleteGraphingAnalysis,
+
+  getGraphingFigures,
+  getGraphingFigure,
+  createGraphingFigure,
+  updateGraphingFigure,
+  deleteGraphingFigure
 };

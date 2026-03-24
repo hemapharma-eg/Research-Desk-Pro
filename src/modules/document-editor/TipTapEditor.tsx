@@ -41,6 +41,7 @@ import { IndexGeneratorNode } from './extensions/IndexGeneratorNode';
 import { FindReplacePanel } from './components/FindReplacePanel';
 import { PaginationPanel } from './components/PaginationPanel';
 import { CitationPreferences } from './components/CitationPreferences';
+import { InsertFigureModal } from './components/InsertFigureModal';
 import { AcademicTemplates } from './templates';
 import './TipTapStyles.css';
 
@@ -56,6 +57,7 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
   const [showEndnotePrompt, setShowEndnotePrompt] = useState(false);
   const [showPaginationPanel, setShowPaginationPanel] = useState(false);
   const [showCitationPrefs, setShowCitationPrefs] = useState(false);
+  const [showFigureModal, setShowFigureModal] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showTrackChanges, setShowTrackChanges] = useState(false);
@@ -278,9 +280,22 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
         setShowFindReplace(true);
       }
     };
+
+    const handleInsertGraph = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.type === 'image' && customEvent.detail.src && editor) {
+        editor.chain().focus().setImage({ src: customEvent.detail.src, alt: customEvent.detail.caption, width: '600px' }).run();
+      }
+    };
+
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    window.addEventListener('insert-graph-object', handleInsertGraph);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('insert-graph-object', handleInsertGraph);
+    };
+  }, [editor]);
 
   if (!editor) {
     return null;
@@ -595,7 +610,7 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
           📊 Table
         </button>
         <button
-          onClick={() => editor.chain().focus().insertGraph().run()}
+          onClick={() => setShowFigureModal(true)}
           style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'transparent' }}
           title="Insert Graph"
         >
@@ -853,6 +868,20 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
           </div>
         </div>
         
+        {showFigureModal && (
+          <InsertFigureModal 
+            onClose={() => setShowFigureModal(false)}
+            onInsert={(figure) => {
+              if (figure.thumbnail_dataurl) {
+                editor.chain().focus().setImage({ src: figure.thumbnail_dataurl, alt: figure.name, width: '600px' }).run();
+              } else {
+                alert('This figure does not have a preview image.');
+              }
+              setShowFigureModal(false);
+            }}
+          />
+        )}
+
         {showComments && (
           <CommentSidebar 
             comments={comments} 

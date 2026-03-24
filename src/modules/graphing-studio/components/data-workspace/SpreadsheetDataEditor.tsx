@@ -1,4 +1,5 @@
-import type { PublicationDataset } from '../../types/GraphingCoreTypes';
+import { useState, useCallback } from 'react';
+import type { PublicationDataset, DataColumn, DataRow } from '../../types/GraphingCoreTypes';
 
 interface SpreadsheetDataEditorProps {
   dataset: PublicationDataset;
@@ -6,151 +7,290 @@ interface SpreadsheetDataEditorProps {
 }
 
 export function SpreadsheetDataEditor({ dataset, onChange }: SpreadsheetDataEditorProps) {
-  
-  const handleCellChange = (rowId: string, colId: string, value: string, subcolIndex: number = 0) => {
-    const numVal = Number(value);
-    const finalVal = value === '' ? null : (!isNaN(numVal) ? numVal : value);
-    
-    const newRows = dataset.rows.map(r => {
-      if (r.id === rowId) {
-        const cellArray = [...(r.cells[colId] || [])];
-        // fill array if empty
-        while (cellArray.length <= subcolIndex) {
-          cellArray.push({ id: crypto.randomUUID(), value: null });
-        }
-        cellArray[subcolIndex] = { ...cellArray[subcolIndex], value: finalVal };
-        
-        return {
-          ...r,
-          cells: {
-            ...r.cells,
-            [colId]: cellArray
-          }
-        };
-      }
-      return r;
-    });
-    
-    onChange({ ...dataset, rows: newRows });
-  };
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'col' | 'row'; index: number } | null>(null);
+  const [dragColIdx, setDragColIdx] = useState<number | null>(null);
+  const [dropColIdx, setDropColIdx] = useState<number | null>(null);
+  const columns = dataset.columns;
+  const rows = dataset.rows;
 
-  const handleRowNameChange = (rowId: string, value: string) => {
-    const newRows = dataset.rows.map(r => r.id === rowId ? { ...r, rowName: value } : r);
+  const reorderColumns = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const newCols = [...columns];
+    const [moved] = newCols.splice(fromIdx, 1);
+    newCols.splice(toIdx, 0, moved);
+    onChange({ ...dataset, columns: newCols });
+  }, [columns, dataset, onChange]);
+
+  const updateCell = useCallback((rowIdx: number, colId: string, value: string) => {
+    const newRows = [...rows];
+    const newRow = { ...newRows[rowIdx], cells: { ...newRows[rowIdx].cells } };
+    const numVal = value === '' ? null : Number(value);
+    const cellVal = value === '' ? null : (isNaN(numVal!) ? value : numVal);
+    newRow.cells[colId] = [{ id: newRow.cells[colId]?.[0]?.id || crypto.randomUUID(), value: cellVal }];
+    newRows[rowIdx] = newRow;
     onChange({ ...dataset, rows: newRows });
+  }, [rows, dataset, onChange]);
+
+  const updateHeader = useCallback((colIdx: number, title: string) => {
+    const newCols = [...columns];
+    newCols[colIdx] = { ...newCols[colIdx], title };
+    onChange({ ...dataset, columns: newCols });
+  }, [columns, dataset, onChange]);
+
+  const addColumn = () => {
+    const newCol: DataColumn = { id: `col-${crypto.randomUUID()}`, title: `Group ${columns.length + 1}`, subcolumns: 1 };
+    const newCols = [...columns, newCol];
+    const newRows = rows.map(r => ({
+      ...r,
+      cells: { ...r.cells, [newCol.id]: [{ id: crypto.randomUUID(), value: null }] },
+    }));
+    onChange({ ...dataset, columns: newCols, rows: newRows });
   };
 
   const addRow = () => {
-    const newRowId = `row-${crypto.randomUUID()}`;
-    onChange({
-      ...dataset,
-      rows: [...dataset.rows, { id: newRowId, rowName: `Row ${dataset.rows.length + 1}`, cells: {} }]
+    const newRow: DataRow = {
+      id: `row-${crypto.randomUUID()}`,
+      cells: Object.fromEntries(columns.map(c => [c.id, [{ id: crypto.randomUUID(), value: null }]])),
+    };
+    onChange({ ...dataset, rows: [...rows, newRow] });
+  };
+
+  const deleteColumn = (idx: number) => {
+    if (columns.length <= 1) return;
+    const colId = columns[idx].id;
+    const newCols = columns.filter((_, i) => i !== idx);
+    const newRows = rows.map(r => {
+      const cells = { ...r.cells };
+      delete cells[colId];
+      return { ...r, cells };
     });
+    onChange({ ...dataset, columns: newCols, rows: newRows });
   };
 
-  const addColumn = () => {
-    const newColId = `col-${crypto.randomUUID()}`;
-    onChange({
-      ...dataset,
-      columns: [...dataset.columns, { id: newColId, title: `Group ${dataset.columns.length + 1}`, subcolumns: 1 }]
+  const deleteRow = (idx: number) => {
+    if (rows.length <= 1) return;
+    onChange({ ...dataset, rows: rows.filter((_, i) => i !== idx) });
+  };
+
+  const sortColumn = (colId: string, ascending: boolean) => {
+    const sorted = [...rows].sort((a, b) => {
+      const va = a.cells[colId]?.[0]?.value;
+      const vb = b.cells[colId]?.[0]?.value;
+      const na = typeof va === 'number' ? va : Number(va);
+      const nb = typeof vb === 'number' ? vb : Number(vb);
+      if (isNaN(na) && isNaN(nb)) return 0;
+      if (isNaN(na)) return 1;
+      if (isNaN(nb)) return -1;
+      return ascending ? na - nb : nb - na;
     });
+    onChange({ ...dataset, rows: sorted });
   };
 
-  const handleColumnTitleChange = (colId: string, newTitle: string) => {
-    const newCols = dataset.columns.map(c => c.id === colId ? { ...c, title: newTitle } : c);
-    onChange({ ...dataset, columns: newCols });
+  const handleContextMenu = (e: React.MouseEvent, type: 'col' | 'row', index: number) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, type, index });
   };
 
-  const hasRowNames = dataset.format === 'grouped' || dataset.format === 'contingency' || dataset.format === 'survival';
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+    const pastedRows = text.split('\n').map(line => line.split('\t'));
+    if (pastedRows.length === 0) return;
+
+    // Get focused cell position from the active element
+    const target = e.target as HTMLInputElement;
+    const rowIdx = parseInt(target.dataset.row || '0');
+    const colIdx = parseInt(target.dataset.col || '0');
+
+    // Expand columns and rows as needed
+    let newCols = [...columns];
+    let newRows = [...rows];
+
+    const neededCols = colIdx + pastedRows[0].length;
+    while (newCols.length < neededCols) {
+      const col: DataColumn = { id: `col-${crypto.randomUUID()}`, title: `Group ${newCols.length + 1}`, subcolumns: 1 };
+      newCols.push(col);
+      newRows = newRows.map(r => ({ ...r, cells: { ...r.cells, [col.id]: [{ id: crypto.randomUUID(), value: null }] } }));
+    }
+
+    const neededRows = rowIdx + pastedRows.length;
+    while (newRows.length < neededRows) {
+      newRows.push({
+        id: `row-${crypto.randomUUID()}`,
+        cells: Object.fromEntries(newCols.map(c => [c.id, [{ id: crypto.randomUUID(), value: null }]])),
+      });
+    }
+
+    pastedRows.forEach((pRow, ri) => {
+      pRow.forEach((val, ci) => {
+        const r = rowIdx + ri;
+        const c = colIdx + ci;
+        if (r < newRows.length && c < newCols.length) {
+          const colId = newCols[c].id;
+          const numVal = val.trim() === '' ? null : Number(val.trim());
+          const cellVal = val.trim() === '' ? null : (isNaN(numVal!) ? val.trim() : numVal);
+          newRows[r] = {
+            ...newRows[r],
+            cells: { ...newRows[r].cells, [colId]: [{ id: newRows[r].cells[colId]?.[0]?.id || crypto.randomUUID(), value: cellVal }] },
+          };
+        }
+      });
+    });
+
+    e.preventDefault();
+    onChange({ ...dataset, columns: newCols, rows: newRows });
+  }, [columns, rows, dataset, onChange]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'white' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }} onPaste={handlePaste}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', gap: '8px', padding: '8px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#0F172A', marginRight: '16px' }}>{dataset.name} ({dataset.format})</h3>
-        <button onClick={addRow} style={{ padding: '4px 8px', fontSize: '12px', background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', cursor: 'pointer' }}>+ Add Row</button>
-        <button onClick={addColumn} style={{ padding: '4px 8px', fontSize: '12px', background: 'white', border: '1px solid #CBD5E1', borderRadius: '4px', cursor: 'pointer' }}>+ Add Column</button>
+      <div className="gs-spreadsheet-toolbar">
+        <span className="gs-dataset-name">{dataset.name}</span>
+        <span className="gs-format-badge">{dataset.format}</span>
+        <button className="gs-btn gs-btn-sm" onClick={addColumn}>+ Column</button>
+        <button className="gs-btn gs-btn-sm" onClick={addRow}>+ Row</button>
       </div>
 
-      {/* Grid container */}
-      <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-        <table style={{ borderCollapse: 'collapse', width: 'max-content', minWidth: '100%' }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', boxShadow: '0 1px 0 #CBD5E1' }}>
+      {/* Table */}
+      <div className="gs-spreadsheet">
+        <table>
+          <thead>
             <tr>
-              <th style={{ width: '40px', borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #CBD5E1', background: '#E2E8F0' }}></th>
-              {hasRowNames && (
-                 <th style={{ minWidth: '100px', padding: '4px 8px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #CBD5E1', fontSize: '12px', color: '#475569' }}>
-                    Title
-                 </th>
-              )}
-              {dataset.columns.map(col => (
-                <th key={col.id} colSpan={col.subcolumns} style={{ minWidth: '100px', padding: '4px 0', textAlign: 'center', borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #CBD5E1' }}>
-                  <input 
-                    value={col.title} 
-                    onChange={e => handleColumnTitleChange(col.id, e.target.value)}
-                    style={{ background: 'transparent', border: 'none', fontWeight: 'bold', textAlign: 'center', fontSize: '12px', color: '#0F172A', width: '100%', outline: 'none' }}
+              <th style={{ width: '40px' }}>#</th>
+              {columns.map((col, ci) => (
+                <th
+                  key={col.id}
+                  onContextMenu={e => handleContextMenu(e, 'col', ci)}
+                  style={{
+                    minWidth: '120px',
+                    cursor: 'grab',
+                    borderLeft: dropColIdx === ci ? '3px solid var(--color-accent-primary)' : undefined,
+                    opacity: dragColIdx === ci ? 0.5 : 1,
+                  }}
+                  draggable
+                  onDragStart={() => setDragColIdx(ci)}
+                  onDragOver={e => { e.preventDefault(); setDropColIdx(ci); }}
+                  onDragLeave={() => setDropColIdx(null)}
+                  onDrop={() => {
+                    if (dragColIdx !== null) reorderColumns(dragColIdx, ci);
+                    setDragColIdx(null);
+                    setDropColIdx(null);
+                  }}
+                  onDragEnd={() => { setDragColIdx(null); setDropColIdx(null); }}
+                >
+                  <input
+                    className="gs-header-input"
+                    value={col.title}
+                    onChange={e => updateHeader(ci, e.target.value)}
+                    style={{ width: '100%', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 'bold', fontSize: '12px', outline: 'none' }}
                   />
                 </th>
               ))}
             </tr>
-            {/* Subcolumn headers row if any max subcolumns > 1 */}
-            {dataset.columns.some(c => c.subcolumns > 1) && (
-              <tr>
-                <th style={{ borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #CBD5E1', background: '#E2E8F0' }}></th>
-                {hasRowNames && <th style={{ borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #CBD5E1', background: '#F8FAFC' }}></th>}
-                {dataset.columns.map(col => (
-                   Array.from({ length: col.subcolumns }).map((_, i) => (
-                      <th key={`${col.id}-sub-${i}`} style={{ minWidth: '80px', padding: '2px 4px', fontSize: '11px', color: '#64748B', fontWeight: 'normal', borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #CBD5E1', textAlign: 'center', background: '#F8FAFC' }}>
-                        {col.subcolumnHeaders?.[i] || `Y${i+1}`}
-                      </th>
-                   ))
-                ))}
-              </tr>
-            )}
           </thead>
           <tbody>
-            {dataset.rows.map((row, rIdx) => (
+            {rows.map((row, ri) => (
               <tr key={row.id}>
-                <td style={{ textAlign: 'center', color: '#94A3B8', fontSize: '11px', borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #E2E8F0', padding: '4px', background: '#F8FAFC' }}>
-                  {rIdx + 1}
+                <td
+                  className="gs-row-num"
+                  onContextMenu={e => handleContextMenu(e, 'row', ri)}
+                >
+                  {ri + 1}
                 </td>
-                
-                {hasRowNames && (
-                  <td style={{ borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #E2E8F0', padding: 0 }}>
-                    <input 
-                      value={row.rowName || ''}
-                      onChange={e => handleRowNameChange(row.id, e.target.value)}
-                      style={{ width: '100%', border: 'none', padding: '6px 8px', fontSize: '13px', outline: 'none', background: 'transparent' }}
-                      placeholder={`Row ${rIdx + 1}`}
-                    />
-                  </td>
-                )}
-
-                {dataset.columns.map(col => (
-                  Array.from({ length: col.subcolumns }).map((_, subIdx) => {
-                    const cellVal = row.cells[col.id]?.[subIdx]?.value;
-                    const displayVal = cellVal === null || cellVal === undefined ? '' : String(cellVal);
-                    return (
-                      <td key={`${row.id}-${col.id}-${subIdx}`} style={{ borderRight: '1px solid #CBD5E1', borderBottom: '1px solid #E2E8F0', padding: 0 }}>
-                        <input
-                          type="text"
-                          value={displayVal}
-                          onChange={e => handleCellChange(row.id, col.id, e.target.value, subIdx)}
-                          style={{ width: '100%', border: 'none', padding: '6px 8px', fontSize: '13px', textAlign: 'right', outline: 'none', background: 'transparent', color: displayVal && isNaN(Number(displayVal)) && col.isX !== true ? '#EF4444' : '#0F172A' }}
-                        />
-                      </td>
-                    );
-                  })
-                ))}
+                {columns.map((col, ci) => {
+                  const cellGroup = row.cells[col.id];
+                  const cellVal = cellGroup?.[0]?.value;
+                  const displayVal = cellVal === null || cellVal === undefined ? '' : String(cellVal);
+                  const isNum = cellVal !== null && cellVal !== undefined && !isNaN(Number(cellVal));
+                  return (
+                    <td key={col.id}>
+                      <input
+                        value={displayVal}
+                        onChange={e => updateCell(ri, col.id, e.target.value)}
+                        className={!isNum && displayVal !== '' ? 'gs-invalid' : ''}
+                        data-row={ri}
+                        data-col={ci}
+                        style={{ textAlign: isNum ? 'right' : 'left' }}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             ))}
-            
-            {/* Empty spacer row for better scrolling */}
-            <tr>
-              <td style={{ padding: '24px' }} colSpan={dataset.columns.length + (hasRowNames ? 2 : 1)}></td>
-            </tr>
           </tbody>
         </table>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <div
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: contextMenu.y,
+              left: contextMenu.x,
+              background: 'white',
+              border: '1px solid var(--color-border-strong)',
+              borderRadius: '8px',
+              boxShadow: 'var(--shadow-lg)',
+              zIndex: 1001,
+              padding: '4px 0',
+              minWidth: '160px',
+            }}
+          >
+            {contextMenu.type === 'col' ? (
+              <>
+                <ContextMenuItem label="Sort A → Z" onClick={() => { sortColumn(columns[contextMenu.index].id, true); setContextMenu(null); }} />
+                <ContextMenuItem label="Sort Z → A" onClick={() => { sortColumn(columns[contextMenu.index].id, false); setContextMenu(null); }} />
+                <div style={{ borderTop: '1px solid var(--color-border-light)', margin: '4px 0' }} />
+                <ContextMenuItem label="Insert column left" onClick={() => {
+                  const newCol: DataColumn = { id: `col-${crypto.randomUUID()}`, title: `Group ${columns.length + 1}`, subcolumns: 1 };
+                  const newCols = [...columns]; newCols.splice(contextMenu.index, 0, newCol);
+                  const newRows = rows.map(r => ({ ...r, cells: { ...r.cells, [newCol.id]: [{ id: crypto.randomUUID(), value: null }] } }));
+                  onChange({ ...dataset, columns: newCols, rows: newRows }); setContextMenu(null);
+                }} />
+                <ContextMenuItem label="Delete column" danger onClick={() => { deleteColumn(contextMenu.index); setContextMenu(null); }} />
+              </>
+            ) : (
+              <>
+                <ContextMenuItem label="Insert row above" onClick={() => {
+                  const newRow: DataRow = { id: `row-${crypto.randomUUID()}`, cells: Object.fromEntries(columns.map(c => [c.id, [{ id: crypto.randomUUID(), value: null }]])) };
+                  const newRows = [...rows]; newRows.splice(contextMenu.index, 0, newRow);
+                  onChange({ ...dataset, rows: newRows }); setContextMenu(null);
+                }} />
+                <ContextMenuItem label="Insert row below" onClick={() => {
+                  const newRow: DataRow = { id: `row-${crypto.randomUUID()}`, cells: Object.fromEntries(columns.map(c => [c.id, [{ id: crypto.randomUUID(), value: null }]])) };
+                  const newRows = [...rows]; newRows.splice(contextMenu.index + 1, 0, newRow);
+                  onChange({ ...dataset, rows: newRows }); setContextMenu(null);
+                }} />
+                <div style={{ borderTop: '1px solid var(--color-border-light)', margin: '4px 0' }} />
+                <ContextMenuItem label="Delete row" danger onClick={() => { deleteRow(contextMenu.index); setContextMenu(null); }} />
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function ContextMenuItem({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'block', width: '100%', padding: '6px 14px', textAlign: 'left', fontSize: '13px',
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        color: danger ? 'var(--color-danger)' : 'var(--color-text-primary)',
+      }}
+      onMouseOver={e => (e.currentTarget.style.background = danger ? '#FEF2F2' : 'var(--color-bg-hover)')}
+      onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {label}
+    </button>
   );
 }

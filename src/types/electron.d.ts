@@ -123,6 +123,62 @@ export interface ElectronAPI {
   updateDocument: (id: string, updates: {title?: string, content?: string}) => Promise<{ success: boolean; data?: Document; error?: string }>;
   deleteDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
   exportDocx: (html: string, title?: string) => Promise<{ success: boolean; filePath?: string; error?: string; canceled?: boolean }>;
+
+  // Graphing Studio
+  getGraphingDatasets: () => Promise<{ success: boolean; data?: GraphingDatasetRow[]; error?: string }>;
+  getGraphingDataset: (id: string) => Promise<{ success: boolean; data?: GraphingDatasetRow; error?: string }>;
+  createGraphingDataset: (data: Partial<GraphingDatasetRow>) => Promise<{ success: boolean; data?: GraphingDatasetRow; error?: string }>;
+  updateGraphingDataset: (id: string, updates: Partial<GraphingDatasetRow>) => Promise<{ success: boolean; data?: GraphingDatasetRow; error?: string }>;
+  deleteGraphingDataset: (id: string) => Promise<{ success: boolean; error?: string }>;
+
+  getGraphingAnalyses: (datasetId?: string) => Promise<{ success: boolean; data?: GraphingAnalysisRow[]; error?: string }>;
+  createGraphingAnalysis: (data: Partial<GraphingAnalysisRow>) => Promise<{ success: boolean; data?: GraphingAnalysisRow; error?: string }>;
+  deleteGraphingAnalysis: (id: string) => Promise<{ success: boolean; error?: string }>;
+
+  getGraphingFigures: (datasetId?: string) => Promise<{ success: boolean; data?: GraphingFigureRow[]; error?: string }>;
+  getGraphingFigure: (id: string) => Promise<{ success: boolean; data?: GraphingFigureRow; error?: string }>;
+  createGraphingFigure: (data: Partial<GraphingFigureRow>) => Promise<{ success: boolean; data?: GraphingFigureRow; error?: string }>;
+  updateGraphingFigure: (id: string, updates: Partial<GraphingFigureRow>) => Promise<{ success: boolean; data?: GraphingFigureRow; error?: string }>;
+  deleteGraphingFigure: (id: string) => Promise<{ success: boolean; error?: string }>;
+
+  exportGraphingFigure: (imageDataUrl: string, defaultName: string, format: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+
+  importCSVFile: () => Promise<{ success: boolean; data?: { content: string; fileName: string; filePath: string }; canceled?: boolean; error?: string }>;
+}
+
+// Graphing Studio DB Row Types
+export interface GraphingDatasetRow {
+  id: string;
+  name: string;
+  format: string;
+  columns_json: string;
+  rows_json: string;
+  metadata_json: string;
+  variable_mapping_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GraphingAnalysisRow {
+  id: string;
+  dataset_id: string;
+  test_name: string;
+  config_json: string;
+  result_json: string;
+  created_at: string;
+}
+
+export interface GraphingFigureRow {
+  id: string;
+  dataset_id: string | null;
+  analysis_id: string | null;
+  name: string;
+  graph_type: string;
+  options_json: string;
+  annotation_json: string;
+  thumbnail_dataurl: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 declare global {
