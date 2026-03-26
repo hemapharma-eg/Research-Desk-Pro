@@ -326,7 +326,7 @@ export function GraphingStudioProvider({ children }: { children: ReactNode }) {
     }, 2000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.dataset, state.mapping]);
+  }, [state.dataset, state.mapping, state.options]);
 
   return (
     <GraphingStudioContext.Provider value={{ state, dispatch, loadDatasetList, loadFigureList, openDataset, createNewDataset, saveDataset, deleteDataset, saveAnalysis }}>

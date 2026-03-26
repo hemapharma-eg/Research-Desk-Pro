@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ErrorBar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, Label,
   ResponsiveContainer, Cell
 } from 'recharts';
 import type { PublicationDataset, VariableMapping } from '../../types/GraphingCoreTypes';
@@ -33,6 +33,126 @@ interface ChartDataPoint {
   iqr: number;
   errorLow: number;
   errorHigh: number;
+}
+
+function RichAxisLabel(props: any) {
+  const { value, position, style, offset, viewBox, angle } = props;
+  if (!value) return null;
+
+  let x = props.x || 0;
+  let y = props.y || 0;
+  let textAnchor = props.textAnchor || "middle";
+  let transform = props.transform || "";
+
+  if (viewBox && typeof viewBox.width === 'number') {
+    if (position === 'insideLeft' || position === 'left') {
+      x = viewBox.x + (viewBox.width / 2) - (offset || 0) - 15;
+      y = viewBox.y + (viewBox.height / 2);
+      textAnchor = 'middle';
+      transform = `rotate(${angle || -90}, ${x}, ${y})`;
+    } else if (position === 'insideBottom' || position === 'bottom') {
+      x = viewBox.x + (viewBox.width / 2);
+      y = viewBox.y + viewBox.height + (offset || 0) + 15;
+      textAnchor = 'middle';
+      if (angle) {
+        transform = `rotate(${angle}, ${x}, ${y})`;
+      }
+    }
+  }
+
+  // Render ^X as superscript and _X as subscript
+  const parts: { text: string; sub?: boolean; sup?: boolean }[] = [];
+  let currentStr = '';
+  let i = 0;
+  while (i < value.length) {
+    if (value.startsWith('^{', i)) {
+      if (currentStr) parts.push({ text: currentStr });
+      currentStr = '';
+      i += 2;
+      const end = value.indexOf('}', i);
+      if (end !== -1) { parts.push({ text: value.slice(i, end), sup: true }); i = end + 1; }
+      else { currentStr += '^{'; i += 2; }
+    } else if (value.startsWith('_{', i)) {
+      if (currentStr) parts.push({ text: currentStr });
+      currentStr = '';
+      i += 2;
+      const end = value.indexOf('}', i);
+      if (end !== -1) { parts.push({ text: value.slice(i, end), sub: true }); i = end + 1; }
+      else { currentStr += '_{'; i += 2; }
+    } else {
+      currentStr += value[i];
+      i++;
+    }
+  }
+  if (currentStr) parts.push({ text: currentStr });
+
+  return (
+    <text x={x} y={y} textAnchor={textAnchor || "middle"} transform={transform} style={style}>
+      {parts.map((p, idx) => (
+        <tspan
+          key={idx}
+          baselineShift={p.sup ? 'super' : p.sub ? 'sub' : 'baseline'}
+          fontSize={p.sup || p.sub ? '0.7em' : '1em'}
+        >
+          {p.text}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
+// Custom Bar renderer that natively overlays one-directional error bars
+// This guarantees exact visual alignment since Recharts provides pixel x, y, width, height for each bar!
+function CustomBarWithErrors(props: any) {
+  const { x, y, width, height, value, payload, fill, options } = props;
+  const { errorRange } = payload;
+  const outlineColor = (options.customBarOutlineColors || {})[payload.name] || options.barOutlineColor || '#333';
+  
+  // Guard against 0 height or missing error bars
+  let pxPerUnit = 0;
+  if (value && height) {
+    pxPerUnit = Math.abs(height / value);
+  } else if (height === 0 && Array.isArray(errorRange)) {
+     // If the bar value is exactly 0 but has errors, finding pxPerUnit requires accessing the Y-axis scale.
+     // Without scale, we can't draw errors for value=0 but usually publication plots don't have this isolated edge case.
+  }
+
+  const errLowPx = (errorRange?.[0] || 0) * (pxPerUnit || 0);
+  const errHighPx = (errorRange?.[1] || 0) * (pxPerUnit || 0);
+
+  const cx = x + width / 2;
+  const topY = value >= 0 ? y : y + height;
+  const capW = (options.errorBarCapWidth || 6) / 2;
+
+  return (
+    <g>
+      <rect 
+        x={x} y={y} width={width} height={height} 
+        fill={fill} 
+        fillOpacity={options.barOpacity} 
+        stroke={outlineColor} 
+        strokeWidth={1} 
+        rx={options.barRadius || 0} ry={options.barRadius || 0} 
+        shapeRendering="crispEdges"
+      />
+      {options.errorBarType !== 'none' && pxPerUnit > 0 && (
+        <g stroke="#333" strokeWidth={1.5}>
+          {options.errorBarDirection !== 'down' && errHighPx > 0 && (
+            <>
+              <line x1={cx} y1={topY} x2={cx} y2={topY - errHighPx} />
+              <line x1={cx - capW} y1={topY - errHighPx} x2={cx + capW} y2={topY - errHighPx} />
+            </>
+          )}
+          {options.errorBarDirection !== 'up' && errLowPx > 0 && (
+            <>
+              <line x1={cx} y1={topY} x2={cx} y2={topY + errLowPx} />
+              <line x1={cx - capW} y1={topY + errLowPx} x2={cx + capW} y2={topY + errLowPx} />
+            </>
+          )}
+        </g>
+      )}
+    </g>
+  );
 }
 
 export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraphViewerProps) {
@@ -89,6 +209,7 @@ export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraph
   };
   const yDomain: [number | string, number | string] = [options.yAxisMin ?? 'auto', options.yAxisMax ?? 'auto'];
   const xAngle = options.xAxisTickRotation;
+  const topMargin = options.showAnnotations ? 20 + Math.max(0, -(options.annotationYOffset || 0)) : 20;
 
   // --- BAR CHARTS (bar, grouped-bar, bar-points) ---
   if (['bar', 'grouped-bar', 'bar-points', 'stacked-bar', 'stacked-bar-100'].includes(chartType)) {
@@ -116,40 +237,54 @@ export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraph
         {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', fontFamily, marginBottom: '4px' }}>{options.title}</div>}
         {options.subtitle && <div style={{ textAlign: 'center', fontSize: fontSize, color: '#666', fontFamily, marginBottom: '8px' }}>{options.subtitle}</div>}
         <ResponsiveContainer width="100%" height="85%">
-          <BarChart data={rechartsData} margin={{ top: 20, right: 30, left: 20, bottom: xAngle ? 40 : 20 }} barCategoryGap={`${(1 - options.barWidth) * 50}%`}>
+          <BarChart data={rechartsData} margin={{ top: topMargin, right: 30, left: 40, bottom: xAngle ? 60 : 40 }} barCategoryGap={`${(1 - options.barWidth) * 50}%`}>
             {showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
-            <XAxis dataKey="name" label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom', offset: xAngle ? 20 : 0, style: { fontSize, fontFamily } } : undefined} angle={xAngle} textAnchor={xAngle ? 'end' : 'middle'} {...commonAxisProps} />
-            <YAxis domain={yDomain} scale={options.yAxisLogScale ? 'log' : 'auto'} label={options.yAxisLabel ? { value: options.yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize, fontFamily } } : undefined} {...commonAxisProps} />
+            <XAxis dataKey="name" angle={xAngle} textAnchor={xAngle ? 'end' : 'middle'} {...commonAxisProps}>
+              {options.xAxisLabel && <Label value={options.xAxisLabel} content={<RichAxisLabel />} position="bottom" offset={(xAngle ? 20 : 0) + (options.xAxisLabelOffset || 0)} style={{ fontSize, fontFamily, fill: '#333' }} />}
+            </XAxis>
+            <YAxis domain={yDomain} scale={options.yAxisLogScale ? 'log' : 'auto'} {...commonAxisProps}>
+              {options.yAxisLabel && <Label value={options.yAxisLabel} content={<RichAxisLabel />} position="insideLeft" angle={-90} offset={options.yAxisLabelOffset || 0} style={{ fontSize, fontFamily, fill: '#333' }} />}
+            </YAxis>
             <Tooltip />
             {showLegend && (
               <Legend 
-                verticalAlign={legendPosition === 'bottom' ? 'bottom' : 'top'} 
+                layout={options.legendLayout || (legendPosition === 'left' || legendPosition === 'right' ? 'vertical' : 'horizontal')}
+                verticalAlign={legendPosition === 'top' ? 'top' : legendPosition === 'bottom' ? 'bottom' : 'middle'} 
                 align={legendPosition === 'left' ? 'left' : legendPosition === 'right' ? 'right' : 'center'} 
+                wrapperStyle={{ transform: `translate(${options.legendOffsetX || 0}px, ${options.legendOffsetY || 0}px)` }}
                 content={(props) => {
                   const { align } = props;
+                  const layoutFlexDirection = options.legendLayout || (legendPosition === 'left' || legendPosition === 'right' ? 'vertical' : 'horizontal') === 'vertical' ? 'column' : 'row';
+                  const halign = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
                   return (
-                    <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', gap: '16px', justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center', fontSize: '12px' }}>
-                      {legendPayload.map((entry, index) => (
-                        <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: entry.color, borderRadius: '2px' }} />
-                          <span style={{ color: 'var(--color-text-secondary)' }}>{entry.value}</span>
-                        </li>
-                      ))}
+                    <ul style={{ 
+                      listStyle: 'none', margin: 0, padding: 0, display: 'flex', gap: '16px', fontSize: '12px',
+                      flexDirection: layoutFlexDirection, 
+                      justifyContent: layoutFlexDirection === 'row' ? halign : 'flex-start',
+                      alignItems: layoutFlexDirection === 'column' ? (legendPosition === 'right' ? 'flex-end' : 'flex-start') : 'center',
+                    }}>
+                      {legendPayload.map((entry, index) => {
+                        const cellOutline = (options.customBarOutlineColors || {})[String(entry.value)] || options.barOutlineColor || '#333';
+                        return (
+                          <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: entry.color, borderRadius: '2px', outline: `1px solid ${cellOutline}` }} />
+                            <span style={{ color: 'var(--color-text-secondary)' }}>{entry.value}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   );
                 }}
               />
             )}
-            <Bar dataKey="value" name="Mean" fillOpacity={options.barOpacity} radius={[2, 2, 0, 0]}>
+            <Bar dataKey="value" name="Mean" shape={<CustomBarWithErrors options={options} />}>
               {rechartsData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
               ))}
-              {options.errorBarType !== 'none' && (
-                <ErrorBar dataKey="errorRange" width={options.errorBarCapWidth} strokeWidth={1.5} stroke="#333" />
-              )}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        
         {/* Overlay individual points for bar-points */}
         {(chartType === 'bar-points' || options.showPoints) && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
@@ -196,12 +331,23 @@ export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraph
       <div style={{ width: '100%', height: '100%', fontFamily, padding: '16px' }}>
         {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', fontFamily, marginBottom: '4px' }}>{options.title}</div>}
         <ResponsiveContainer width="100%" height="90%">
-          <LineChart data={lineData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <LineChart data={lineData} margin={{ top: topMargin, right: 30, left: 40, bottom: 40 }}>
             {showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
-            <XAxis dataKey="name" label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom', style: { fontSize, fontFamily } } : undefined} {...commonAxisProps} />
-            <YAxis domain={yDomain} label={options.yAxisLabel ? { value: options.yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize, fontFamily } } : undefined} {...commonAxisProps} />
+            <XAxis dataKey="name" {...commonAxisProps}>
+              {options.xAxisLabel && <Label value={options.xAxisLabel} content={<RichAxisLabel />} position="bottom" offset={options.xAxisLabelOffset || 0} style={{ fontSize, fontFamily, fill: '#333' }} />}
+            </XAxis>
+            <YAxis domain={yDomain} {...commonAxisProps}>
+              {options.yAxisLabel && <Label value={options.yAxisLabel} content={<RichAxisLabel />} position="insideLeft" angle={-90} offset={options.yAxisLabelOffset || 0} style={{ fontSize, fontFamily, fill: '#333' }} />}
+            </YAxis>
             <Tooltip />
-            {showLegend && <Legend />}
+            {showLegend && (
+              <Legend 
+                layout={options.legendLayout || (legendPosition === 'left' || legendPosition === 'right' ? 'vertical' : 'horizontal')}
+                verticalAlign={legendPosition === 'top' ? 'top' : legendPosition === 'bottom' ? 'bottom' : 'middle'} 
+                align={legendPosition === 'left' ? 'left' : legendPosition === 'right' ? 'right' : 'center'} 
+                wrapperStyle={{ transform: `translate(${options.legendOffsetX || 0}px, ${options.legendOffsetY || 0}px)` }}
+              />
+            )}
             {chartData.map((g, i) => (
               <Line key={g.name} type="monotone" dataKey={g.name} stroke={colorPalette[i % colorPalette.length]}
                 strokeWidth={options.lineThickness}
@@ -263,16 +409,23 @@ export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraph
       <div style={{ width: '100%', height: '100%', fontFamily, padding: '16px', position: 'relative' }}>
         {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', fontFamily, marginBottom: '4px' }}>{options.title}</div>}
         <ResponsiveContainer width="100%" height="90%">
-          <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <ScatterChart margin={{ top: topMargin, right: 30, left: 40, bottom: 40 }}>
             {showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
-            <XAxis dataKey="x" type="number" name={chartData[0]?.name || 'X'} domain={['auto', 'auto']}
-              label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom', style: { fontSize, fontFamily } } : undefined}
-              {...commonAxisProps} />
-            <YAxis dataKey="y" type="number" name={chartData[1]?.name || 'Y'} domain={yDomain}
-              label={options.yAxisLabel ? { value: options.yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize, fontFamily } } : undefined}
-              {...commonAxisProps} />
+            <XAxis dataKey="x" type="number" name={chartData[0]?.name || 'X'} domain={['auto', 'auto']} {...commonAxisProps}>
+              {options.xAxisLabel && <Label value={options.xAxisLabel} content={<RichAxisLabel />} position="bottom" offset={options.xAxisLabelOffset || 0} style={{ fontSize, fontFamily, fill: '#333' }} />}
+            </XAxis>
+            <YAxis dataKey="y" type="number" name={chartData[1]?.name || 'Y'} domain={yDomain} {...commonAxisProps}>
+              {options.yAxisLabel && <Label value={options.yAxisLabel} content={<RichAxisLabel />} position="insideLeft" angle={-90} offset={options.yAxisLabelOffset || 0} style={{ fontSize, fontFamily, fill: '#333' }} />}
+            </YAxis>
             <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-            {showLegend && <Legend />}
+            {showLegend && (
+              <Legend 
+                layout={options.legendLayout || (legendPosition === 'left' || legendPosition === 'right' ? 'vertical' : 'horizontal')}
+                verticalAlign={legendPosition === 'top' ? 'top' : legendPosition === 'bottom' ? 'bottom' : 'middle'} 
+                align={legendPosition === 'left' ? 'left' : legendPosition === 'right' ? 'right' : 'center'} 
+                wrapperStyle={{ transform: `translate(${options.legendOffsetX || 0}px, ${options.legendOffsetY || 0}px)` }}
+              />
+            )}
             
             {/* Draw Sigmoidal overlay as an invisible line so it takes coordinate space correctly using Recharts Line. Wait, ScatterChart doesn't easily support Line overlay with math curve, but we can fake it by adding a second scatter dataset and using a continuous line! */}
             {chartType === 'dose-response' && sigmoidCurve && (
@@ -332,7 +485,8 @@ export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraph
 // ========== Custom Renderers ==========
 
 function renderBoxPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], showPoints: boolean) {
-  const padding = { top: 60, right: 40, bottom: 50, left: 60 };
+  const customTopMargin = options.showAnnotations ? 60 + Math.max(0, -(options.annotationYOffset || 0)) : 60;
+  const padding = { top: customTopMargin, right: 40, bottom: 50, left: 60 };
   const totalW = 800, totalH = 500;
   const plotW = totalW - padding.left - padding.right;
   const plotH = totalH - padding.top - padding.bottom;
@@ -380,7 +534,7 @@ function renderBoxPlot(data: ChartDataPoint[], options: GraphStyleOptions, palet
               <line x1={cx - barW * 0.3} y1={whiskerHigh} x2={cx + barW * 0.3} y2={whiskerHigh} stroke="#333" strokeWidth="1" />
               <line x1={cx - barW * 0.3} y1={whiskerLow} x2={cx + barW * 0.3} y2={whiskerLow} stroke="#333" strokeWidth="1" />
               {/* Box */}
-              <rect x={cx - barW / 2} y={q3Y} width={barW} height={q1Y - q3Y} fill={fill} fillOpacity={options.barOpacity} stroke="#333" strokeWidth="1" />
+              <rect x={cx - barW / 2} y={q3Y} width={barW} height={Math.max(1, q1Y - q3Y)} fill={fill} fillOpacity={options.barOpacity} stroke={options.barOutlineColor || '#333'} strokeWidth="1" />
               {/* Median */}
               <line x1={cx - barW / 2} y1={medY} x2={cx + barW / 2} y2={medY} stroke="#333" strokeWidth="2" />
               {/* Label */}
@@ -399,14 +553,15 @@ function renderBoxPlot(data: ChartDataPoint[], options: GraphStyleOptions, palet
           );
         })}
 
-        {options.xAxisLabel && <text x={totalW / 2} y={totalH - 5} textAnchor="middle" fontSize="12" fill="#333">{options.xAxisLabel}</text>}
+        {options.xAxisLabel && <RichAxisLabel x={totalW / 2} y={totalH - 5} value={options.xAxisLabel} textAnchor="middle" style={{fontSize: 12, fill: '#333'}} />}
       </svg>
     </div>
   );
 }
 
 function renderViolinPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], showPoints: boolean) {
-  const padding = { top: 60, right: 40, bottom: 50, left: 60 };
+  const customTopMargin = options.showAnnotations ? 60 + Math.max(0, -(options.annotationYOffset || 0)) : 60;
+  const padding = { top: customTopMargin, right: 40, bottom: 50, left: 60 };
   const totalW = 800, totalH = 500;
   const plotW = totalW - padding.left - padding.right;
   const plotH = totalH - padding.top - padding.bottom;
@@ -505,12 +660,16 @@ function renderHistogram(data: ChartDataPoint[], options: GraphStyleOptions, pal
     <div style={{ width: '100%', height: '100%', fontFamily: options.fontFamily, padding: '16px' }}>
       {options.title && <div style={{ textAlign: 'center', fontSize: options.titleFontSize, fontWeight: 'bold', marginBottom: 4 }}>{options.title}</div>}
       <ResponsiveContainer width="100%" height="90%">
-        <BarChart data={rechartsData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }} barCategoryGap="0%">
+        <BarChart data={rechartsData} margin={{ top: options.showAnnotations ? 20 + Math.max(0, -(options.annotationYOffset || 0)) : 20, right: 30, left: 40, bottom: 40 }} barCategoryGap="0%">
           {options.showGridlines && <CartesianGrid strokeDasharray="3 3" opacity={0.4} />}
-          <XAxis dataKey="name" label={options.xAxisLabel ? { value: options.xAxisLabel, position: 'bottom' } : undefined} />
-          <YAxis label={options.yAxisLabel ? { value: options.yAxisLabel || 'Frequency', angle: -90, position: 'insideLeft' } : { value: 'Frequency', angle: -90, position: 'insideLeft' }} />
+          <XAxis dataKey="name">
+            {options.xAxisLabel && <Label value={options.xAxisLabel} content={<RichAxisLabel />} position="bottom" offset={options.xAxisLabelOffset || 0} style={{ fill: '#333' }} />}
+          </XAxis>
+          <YAxis>
+            {options.yAxisLabel ? <Label value={options.yAxisLabel} content={<RichAxisLabel />} position="insideLeft" angle={-90} offset={options.yAxisLabelOffset || 0} style={{ fill: '#333' }} /> : <Label value="Frequency" content={<RichAxisLabel />} position="insideLeft" angle={-90} offset={options.yAxisLabelOffset || 0} style={{ fill: '#333' }} />}
+          </YAxis>
           <Tooltip />
-          <Bar dataKey="count" fill={palette[0]} fillOpacity={options.barOpacity} />
+          <Bar dataKey="count" fill={palette[0]} fillOpacity={options.barOpacity} stroke={options.barOutlineColor || '#333'} strokeWidth={1} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -520,7 +679,8 @@ function renderHistogram(data: ChartDataPoint[], options: GraphStyleOptions, pal
 function renderBeforeAfter(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[]) {
   if (data.length < 2) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Need at least 2 groups for before–after plot.</div>;
   const n = Math.min(data[0].values.length, data[1].values.length);
-  const padding = { top: 60, right: 60, bottom: 50, left: 60 };
+  const customTopMargin = options.showAnnotations ? 60 + Math.max(0, -(options.annotationYOffset || 0)) : 60;
+  const padding = { top: customTopMargin, right: 60, bottom: 50, left: 60 };
   const totalW = 800, totalH = 500;
   const plotW = totalW - padding.left - padding.right;
   const plotH = totalH - padding.top - padding.bottom;
@@ -559,7 +719,8 @@ function renderBeforeAfter(data: ChartDataPoint[], options: GraphStyleOptions, p
 }
 
 function renderStripPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], jitter: boolean) {
-  const padding = { top: 60, right: 40, bottom: 50, left: 60 };
+  const customTopMargin = options.showAnnotations ? 60 + Math.max(0, -(options.annotationYOffset || 0)) : 60;
+  const padding = { top: customTopMargin, right: 40, bottom: 50, left: 60 };
   const totalW = 800, totalH = 500;
   const plotW = totalW - padding.left - padding.right;
   const plotH = totalH - padding.top - padding.bottom;

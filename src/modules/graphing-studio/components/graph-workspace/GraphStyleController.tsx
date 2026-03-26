@@ -1,5 +1,53 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { GraphStyleOptions, ChartType, ErrorBarType, PointShape, LineStyle, LegendPosition, AnnotationStyle } from '../../types/GraphStyleOptions';
+
+const SYMBOLS = ['µ','α','β','γ','δ','ε','θ','λ','π','σ','τ','φ','ω','Δ','Σ','Ω','°','±','≤','≥','≠','≈','²','³','⁻¹','Å','∞','√','∫','∂','ℓ','ℏ','→','←','↑','↓'];
+
+function AxisLabelEditor({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [showSymbols, setShowSymbols] = useState(false);
+
+  const insertAtCursor = useCallback((text: string) => {
+    const el = inputRef.current;
+    if (!el) { onChange(value + text); return; }
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const newVal = value.slice(0, start) + text + value.slice(end);
+    onChange(newVal);
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start + text.length, start + text.length); });
+  }, [value, onChange]);
+
+  const wrapSelection = useCallback((prefix: string, suffix: string) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const selected = value.slice(start, end);
+    const wrapped = prefix + (selected || 'x') + suffix;
+    const newVal = value.slice(0, start) + wrapped + value.slice(end);
+    onChange(newVal);
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start + prefix.length, start + prefix.length + (selected || 'x').length); });
+  }, [value, onChange]);
+
+  return (
+    <div>
+      <label className="gs-label">{label}</label>
+      <input ref={inputRef} className="gs-input" value={value} onChange={e => onChange(e.target.value)} placeholder={`${label}...`} />
+      <div style={{ display: 'flex', gap: '2px', marginTop: '4px', flexWrap: 'wrap' }}>
+        <button type="button" className="gs-btn gs-btn-sm" title="Superscript (wrap selection)" style={{ fontSize: '11px', padding: '2px 6px', fontFamily: 'monospace' }} onClick={() => wrapSelection('^{', '}')}>x<sup style={{fontSize:'8px'}}>n</sup></button>
+        <button type="button" className="gs-btn gs-btn-sm" title="Subscript (wrap selection)" style={{ fontSize: '11px', padding: '2px 6px', fontFamily: 'monospace' }} onClick={() => wrapSelection('_{', '}')}>x<sub style={{fontSize:'8px'}}>n</sub></button>
+        <button type="button" className="gs-btn gs-btn-sm" title="Insert symbol" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={() => setShowSymbols(!showSymbols)}>Σ</button>
+      </div>
+      {showSymbols && (
+        <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '4px', padding: '6px', background: 'var(--color-bg-hover)', borderRadius: '6px', maxHeight: '100px', overflowY: 'auto' }}>
+          {SYMBOLS.map(s => (
+            <button key={s} type="button" className="gs-btn gs-btn-sm" style={{ padding: '2px 5px', fontSize: '12px', minWidth: '26px' }} onClick={() => { insertAtCursor(s); setShowSymbols(false); }}>{s}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface GraphStyleControllerProps {
   options: GraphStyleOptions;
@@ -99,12 +147,18 @@ export function GraphStyleController({ options, groupNames = [], onChange }: Gra
               </div>
               <div className="gs-form-row">
                 <div>
-                  <label className="gs-label">X Axis Label</label>
-                  <input className="gs-input" value={options.xAxisLabel} onChange={e => update({ xAxisLabel: e.target.value })} />
+                  <AxisLabelEditor label="X Axis Label" value={options.xAxisLabel} onChange={v => update({ xAxisLabel: v })} />
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label className="gs-label" style={{ margin: 0 }}>Offset</label>
+                    <input type="number" className="gs-input" value={options.xAxisLabelOffset || 0} onChange={e => update({ xAxisLabelOffset: Number(e.target.value) })} style={{ width: '60px', padding: '2px 4px' }} />
+                  </div>
                 </div>
                 <div>
-                  <label className="gs-label">Y Axis Label</label>
-                  <input className="gs-input" value={options.yAxisLabel} onChange={e => update({ yAxisLabel: e.target.value })} />
+                  <AxisLabelEditor label="Y Axis Label" value={options.yAxisLabel} onChange={v => update({ yAxisLabel: v })} />
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label className="gs-label" style={{ margin: 0 }}>Offset</label>
+                    <input type="number" className="gs-input" value={options.yAxisLabelOffset || 0} onChange={e => update({ yAxisLabelOffset: Number(e.target.value) })} style={{ width: '60px', padding: '2px 4px' }} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -274,6 +328,36 @@ export function GraphStyleController({ options, groupNames = [], onChange }: Gra
                   <input type="range" min="20" max="100" value={options.barOpacity * 100} onChange={e => update({ barOpacity: Number(e.target.value) / 100 })} style={{ width: '100%' }} />
                 </div>
               </div>
+              <div className="gs-form-group" style={{ marginTop: '8px' }}>
+                <label className="gs-label">Bar Outline Color</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input type="color" value={options.barOutlineColor || '#333333'} onChange={e => update({ barOutlineColor: e.target.value })} style={{ width: '32px', height: '32px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer' }} />
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{options.barOutlineColor || '#333333'}</span>
+                  <button className="gs-btn gs-btn-sm" onClick={() => update({ barOutlineColor: '#333333' })}>Reset</button>
+                </div>
+              </div>
+              
+              {groupNames.length > 0 && (
+                <div style={{ marginTop: '16px' }}>
+                  <label className="gs-label">Individual Outline Colors</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {groupNames.map((g) => {
+                      const c = (options.customBarOutlineColors || {})[g] || options.barOutlineColor || '#333333';
+                      return (
+                        <div key={`ob-${g}`} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input 
+                            type="color" 
+                            value={c} 
+                            onChange={e => update({ customBarOutlineColors: { ...(options.customBarOutlineColors || {}), [g]: e.target.value } })}
+                            style={{ width: '20px', height: '20px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="gs-panel-section">
@@ -359,12 +443,36 @@ export function GraphStyleController({ options, groupNames = [], onChange }: Gra
                 Show legend
               </label>
               {options.showLegend && (
-                <select className="gs-select" value={options.legendPosition} onChange={e => update({ legendPosition: e.target.value as LegendPosition })}>
-                  <option value="top">Top</option>
-                  <option value="bottom">Bottom</option>
-                  <option value="right">Right</option>
-                  <option value="left">Left</option>
-                </select>
+                <>
+                  <div className="gs-form-row">
+                    <div>
+                      <label className="gs-label">Position</label>
+                      <select className="gs-select" value={options.legendPosition} onChange={e => update({ legendPosition: e.target.value as LegendPosition })}>
+                        <option value="top">Top</option>
+                        <option value="bottom">Bottom</option>
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="gs-label">Layout Direction</label>
+                      <select className="gs-select" value={options.legendLayout || 'horizontal'} onChange={e => update({ legendLayout: e.target.value as 'horizontal' | 'vertical' })}>
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="gs-form-row" style={{ marginTop: '8px' }}>
+                    <div>
+                      <label className="gs-label">Offset X</label>
+                      <input type="number" className="gs-input" value={options.legendOffsetX || 0} onChange={e => update({ legendOffsetX: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <label className="gs-label">Offset Y</label>
+                      <input type="number" className="gs-input" value={options.legendOffsetY || 0} onChange={e => update({ legendOffsetY: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 

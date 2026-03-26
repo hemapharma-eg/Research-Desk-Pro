@@ -56,12 +56,14 @@ export function SignificanceAnnotator({ statResult, options, groupNames }: Signi
   const yOffset = options.annotationYOffset ?? 0;
   const spacing = options.annotationBracketSpacing ?? 18;
 
+  const topPosition = Math.max(0, yOffset);
+
   return (
     <div
       className="gs-annotation-overlay"
       style={{
         position: 'absolute',
-        top: `${yOffset}px`,
+        top: `${topPosition}px`,
         left: '60px',
         right: '40px',
         height: `${Math.max(50, brackets.length * spacing + 20)}px`,

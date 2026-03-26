@@ -38,6 +38,7 @@ export interface GraphStyleOptions {
   // Colors
   colorPalette: string[];
   customBarColors?: Record<string, string>;
+  customBarOutlineColors?: Record<string, string>;
   customPointColors?: Record<string, string>;
 
   // Points
@@ -53,16 +54,22 @@ export interface GraphStyleOptions {
   // Bars
   barWidth: number;
   barOpacity: number;
+  barOutlineColor: string;
 
   // Legend
   legendPosition: LegendPosition;
   showLegend: boolean;
+  legendLayout: 'horizontal' | 'vertical';
+  legendOffsetX: number;
+  legendOffsetY: number;
 
   // Axes
   yAxisMin: number | null;
   yAxisMax: number | null;
   yAxisLogScale: boolean;
   xAxisTickRotation: number;
+  xAxisLabelOffset: number;
+  yAxisLabelOffset: number;
   showGridlines: boolean;
 
   // Typography
@@ -90,6 +97,7 @@ export const DEFAULT_STYLE_OPTIONS: GraphStyleOptions = {
   annotationBracketSpacing: 18,
   colorPalette: ['#2962FF', '#FF6D00', '#00C853', '#AA00FF', '#FFD600', '#D50000', '#00BFA5', '#6200EA'],
   customBarColors: {},
+  customBarOutlineColors: {},
   customPointColors: {},
   showPoints: false,
   pointSize: 5,
@@ -99,12 +107,18 @@ export const DEFAULT_STYLE_OPTIONS: GraphStyleOptions = {
   lineStyle: 'solid',
   barWidth: 0.6,
   barOpacity: 0.85,
+  barOutlineColor: '#333333',
   legendPosition: 'top',
   showLegend: true,
+  legendLayout: 'horizontal',
+  legendOffsetX: 0,
+  legendOffsetY: 0,
   yAxisMin: null,
   yAxisMax: null,
   yAxisLogScale: false,
   xAxisTickRotation: 0,
+  xAxisLabelOffset: 0,
+  yAxisLabelOffset: 0,
   showGridlines: true,
   fontSize: 12,
   fontFamily: 'Arial, sans-serif',
