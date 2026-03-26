@@ -5,7 +5,7 @@ import { ReferenceManager } from './modules/reference-manager/ReferenceManager';
 import { DocumentEditor } from './modules/document-editor/DocumentEditor';
 import { GraphingStudio } from './modules/graphing-studio/GraphingStudio';
 import { PowerAnalysis } from './modules/power-analysis/PowerAnalysis';
-import { SystematicReview } from './modules/systematic-review/SystematicReview';
+import { SystematicReviewStudio } from './modules/systematic-review/SystematicReviewStudio';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 
 function AppContent() {
@@ -25,7 +25,7 @@ function AppContent() {
       case 'power-analysis':
         return <PowerAnalysis />;
       case 'systematic-review':
-        return <SystematicReview />;
+        return <SystematicReviewStudio />;
       default:
         return (
           <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-lg)' }}>
