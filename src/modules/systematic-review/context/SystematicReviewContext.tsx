@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { 
   ReviewProject, 
@@ -46,7 +46,7 @@ const initialState: ReviewState = {
   conflicts: [],
   logs: [],
   activeStage: 'setup',
-  activeReviewer: null,
+  activeReviewer: { id: 'local-user', name: 'Current User', role: 'owner/admin' },
   error: null,
   isSaving: false,
 };
@@ -123,6 +123,32 @@ const ReviewContext = createContext<ReviewContextProps | undefined>(undefined);
 
 export function SystematicReviewProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reviewReducer, initialState);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sr_app_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          dispatch({ type: 'LOAD_STATE', payload: parsed });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load Systematic Review state', e);
+    }
+  }, []);
+
+  // Save to localStorage on state change
+  useEffect(() => {
+    if (state.project) {
+      try {
+        localStorage.setItem('sr_app_state', JSON.stringify(state));
+      } catch (e) {
+        console.warn('Failed to save Systematic Review state', e);
+      }
+    }
+  }, [state]);
 
   const logEvent = (
     actionType: ActionType,

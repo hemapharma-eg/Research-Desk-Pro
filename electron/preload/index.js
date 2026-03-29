@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   updateReferenceStatus: (id, status) => ipcRenderer.invoke('reference:updateStatus', id, status),
   deleteReference: (id) => ipcRenderer.invoke('reference:delete', id),
   fetchDOI: (doi) => ipcRenderer.invoke('reference:fetchDOI', doi),
-  importReferencesFile: () => ipcRenderer.invoke('reference:importFile'),
+  importReferencesFile: (folderId) => ipcRenderer.invoke('reference:importFile', folderId),
   exportLib: (refs, format) => ipcRenderer.invoke('reference:exportLib', refs, format),
   importStyleFile: () => ipcRenderer.invoke('reference:importStyle'),
   getCustomStyles: () => ipcRenderer.invoke('reference:getCustomStyles'),
@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteFolder: (id) => ipcRenderer.invoke('reference:deleteFolder', id),
   renameFolder: (id, newName) => ipcRenderer.invoke('reference:renameFolder', id, newName),
   getFoldersByRef: (ref_id) => ipcRenderer.invoke('reference:getFoldersByRef', ref_id),
+  getAllFolderMappings: () => ipcRenderer.invoke('reference:getAllFolderMappings'),
   setFoldersForRef: (ref_id, folder_ids) => ipcRenderer.invoke('reference:setFoldersForRef', ref_id, folder_ids),
 
   // Documents
@@ -56,5 +57,8 @@ contextBridge.exposeInMainWorld('api', {
 
   exportGraphingFigure: (imageDataUrl, defaultName, format) => ipcRenderer.invoke('graphing:exportFigure', imageDataUrl, defaultName, format),
 
-  importCSVFile: () => ipcRenderer.invoke('graphing:importCSVFile')
+  importCSVFile: () => ipcRenderer.invoke('graphing:importCSVFile'),
+
+  // Utilities
+  readFileBase64: (filePath) => ipcRenderer.invoke('file:readBase64', filePath)
 });

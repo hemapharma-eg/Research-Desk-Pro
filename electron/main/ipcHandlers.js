@@ -57,6 +57,17 @@ ipcMain.handle('dialog:openPath', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('file:readBase64', async (event, filePath) => {
+  try {
+    const fs = require('node:fs');
+    const buffer = fs.readFileSync(filePath);
+    return { success: true, base64: buffer.toString('base64') };
+  } catch (error) {
+    console.error('Failed to read file:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
 ipcMain.handle('project:createOrOpen', async (event, projectPath) => {
   return dbManager.initDatabase(projectPath);
 });
@@ -118,7 +129,7 @@ ipcMain.handle('reference:delete', async (event, id) => {
   }
 });
 
-ipcMain.handle('reference:importFile', async () => {
+ipcMain.handle('reference:importFile', async (event, folderId) => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [{ name: 'Reference Files', extensions: ['ris', 'bib'] }]
@@ -179,7 +190,18 @@ ipcMain.handle('reference:importFile', async () => {
         doi,
         raw_metadata: JSON.stringify(item)
       };
+      
       const added = dbManager.addReference(refData);
+      
+      // If a folder was selected during import, instantaneously bind it!
+      if (folderId) {
+        try {
+          dbManager.setReferenceFolders(added.id, [folderId]);
+        } catch(e) {
+          console.error('Fast-binding folder failed for', added.id, e);
+        }
+      }
+      
       addedReferences.push(added);
     }
 
@@ -359,6 +381,15 @@ ipcMain.handle('reference:getFoldersByRef', async (event, ref_id) => {
   try {
     const folderIds = dbManager.getReferenceFolders(ref_id);
     return { success: true, data: folderIds }; // array of strings
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reference:getAllFolderMappings', async () => {
+  try {
+    const mappings = dbManager.getAllFolderMappings();
+    return { success: true, data: mappings };
   } catch (error) {
     return { success: false, error: error.message };
   }

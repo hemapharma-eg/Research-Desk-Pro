@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
-import type { ReviewType, Discipline, ExclusionReason } from '../../types/ReviewModels';
+import type { ReviewType, Discipline } from '../../types/ReviewModels';
 
 const REVIEW_TYPES: ReviewType[] = [
   'systematic review', 'scoping review', 'rapid review', 'umbrella review',
@@ -58,7 +58,7 @@ export function ReviewProjectSetup() {
                 ],
                 topicDictionaries: {},
                 studyDesignDictionaries: {},
-                settings: { screeningMode: 'dual independent', blinding: true }
+                settings: { screeningMode: 'single', blinding: true }
               }
             });
             logEvent('project_created', 'setup', undefined, 'Initialized new project');
@@ -132,9 +132,19 @@ export function ReviewProjectSetup() {
               </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 6 }}>Protocol Registration (PROSPERO / OSF)</label>
-              <input value={p.protocolRegistration} onChange={e => updateProject({ protocolRegistration: e.target.value })} placeholder="e.g. CRD420..." style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid var(--color-border-light)' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 6 }}>Protocol Registration (PROSPERO / OSF)</label>
+                <input value={p.protocolRegistration} onChange={e => updateProject({ protocolRegistration: e.target.value })} placeholder="e.g. CRD420..." style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid var(--color-border-light)' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: 6 }}>Screening Mode</label>
+                <select value={p.settings.screeningMode} onChange={e => updateProject({ settings: { ...p.settings, screeningMode: e.target.value as any } })} style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid var(--color-border-light)' }}>
+                  <option value="single">Single Reviewer (Auto-advance)</option>
+                  <option value="dual independent">Dual Independent</option>
+                  <option value="dual with adjudication">Dual with Adjudication</option>
+                </select>
+              </div>
             </div>
 
           </div>

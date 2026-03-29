@@ -1,6 +1,7 @@
 const electron = require('electron');
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
+const protocol = electron.protocol;
 const path = require('node:path');
 
 process.env.DIST = path.join(__dirname, '../../dist');
@@ -19,6 +20,8 @@ function createWindow() {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      plugins: true, // Needed for built-in PDF viewer
+      webSecurity: true 
     },
   });
 
@@ -36,6 +39,18 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  protocol.registerFileProtocol('local-resource', (request, callback) => {
+    const url = request.url.replace('local-resource://', '');
+    try {
+      return callback(decodeURIComponent(url));
+    }
+    catch (error) {
+      console.error(error);
+    }
+  });
+
+  createWindow();
+});
 
 require('./ipcHandlers.js');

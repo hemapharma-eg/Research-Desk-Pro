@@ -263,6 +263,17 @@ function getReferenceFolders(ref_id) {
   return dbInst.prepare(`SELECT folder_id FROM reference_folders WHERE ref_id = ?`).all().map(r => r.folder_id);
 }
 
+function getAllFolderMappings() {
+  const dbInst = getDb();
+  const rows = dbInst.prepare(`SELECT ref_id, folder_id FROM reference_folders`).all();
+  const mapping = {};
+  for (const row of rows) {
+    if (!mapping[row.ref_id]) mapping[row.ref_id] = [];
+    mapping[row.ref_id].push(row.folder_id);
+  }
+  return mapping;
+}
+
 function setReferenceFolders(ref_id, folder_ids) {
   const dbInst = getDb();
   const tx = dbInst.transaction(() => {
@@ -479,6 +490,7 @@ module.exports = {
   deleteFolder,
   renameFolder,
   getReferenceFolders,
+  getAllFolderMappings,
   setReferenceFolders,
 
   getDocuments,

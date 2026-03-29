@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
 import { computeSmartMetadata } from '../../utils/SmartAssistanceLayer';
-import type { ReviewRecord, ScreeningDecision } from '../../types/ReviewModels';
+import type { ScreeningDecision } from '../../types/ReviewModels';
 
 export function TitleAbstractScreening() {
   const { state, dispatch, logEvent } = useSystematicReview();
@@ -9,23 +9,27 @@ export function TitleAbstractScreening() {
   // Create a queue prioritizing unscreened records, but hiding duplicates unless selected natively
   const queue = useMemo(() => {
     return state.records
-      .filter(r => r.stage === 'title-abstract-screening' && r.dedupStatus !== 'duplicate')
+      .filter(r => r.dedupStatus !== 'duplicate' && (r.stage === 'title-abstract-screening' || !!r.titleAbstractDecisions[state.activeReviewer?.id || '']))
       // Map smart hints dynamically
       .map(r => ({ ...r, ...computeSmartMetadata(r, state.project) }))
-      // Sort: Unscreened first, then by relevance score descending
-      .sort((a, b) => {
-        const aScreened = !!a.titleAbstractDecisions[state.activeReviewer?.id || ''];
-        const bScreened = !!b.titleAbstractDecisions[state.activeReviewer?.id || ''];
-        if (aScreened && !bScreened) return 1;
-        if (!aScreened && bScreened) return -1;
-        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-      });
+      // Sort: solely by relevance score descending so the list remains stable
+      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
   }, [state.records, state.project, state.activeReviewer]);
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const firstUnscreened = queue.findIndex(r => !r.titleAbstractDecisions[state.activeReviewer?.id || '']);
+    return firstUnscreened >= 0 ? firstUnscreened : 0;
+  });
   const activeRecord = queue[currentIndex];
 
-  const recordDecision = useCallback((decision: ScreeningDecision, reasonId?: string) => {
+  const [reasonId, setReasonId] = useState('');
+
+  // Reset the exclusion reason dropdown whenever the active record changes
+  useEffect(() => {
+    setReasonId('');
+  }, [activeRecord?.id]);
+
+  const recordDecision = useCallback((decision: ScreeningDecision, optReasonId?: string) => {
     if (!activeRecord || !state.activeReviewer) return;
 
     const updatedRecord = { ...activeRecord };
@@ -36,7 +40,7 @@ export function TitleAbstractScreening() {
       [state.activeReviewer.id]: {
         reviewerId: state.activeReviewer.id,
         decision,
-        reasonId,
+        reasonId: optReasonId,
         timestamp: new Date().toISOString()
       }
     };
@@ -49,7 +53,7 @@ export function TitleAbstractScreening() {
       } else if (decision === 'exclude') {
         updatedRecord.stage = 'excluded';
         updatedRecord.finalDisposition = 'excluded';
-        updatedRecord.finalReasonId = reasonId;
+        updatedRecord.finalReasonId = optReasonId;
       } else {
         updatedRecord.finalDisposition = 'maybe';
       }
@@ -58,7 +62,7 @@ export function TitleAbstractScreening() {
     dispatch({ type: 'UPDATE_RECORD', payload: { id: activeRecord.id, updates: updatedRecord } });
     logEvent('screening_decision', 'title-abstract-screening', activeRecord.id, `TiAb ${decision.toUpperCase()}`);
 
-    // Auto Advance
+    // Auto Advance since the queue is mathematically stable
     if (currentIndex < queue.length - 1) {
       setCurrentIndex(curr => curr + 1);
     }
@@ -208,7 +212,11 @@ export function TitleAbstractScreening() {
               <label style={{ display: 'block', fontSize: 13, fontWeight: 'bold', marginBottom: 8, color: 'var(--color-text-secondary)' }}>Add Exclusion Reason</label>
               <select 
                 style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid var(--color-border-light)' }}
-                onChange={(e) => recordDecision('exclude', e.target.value)}
+                value={reasonId}
+                onChange={(e) => {
+                  setReasonId(e.target.value);
+                  recordDecision('exclude', e.target.value);
+                }}
               >
                 <option value="">Select reason...</option>
                 {state.project?.exclusionReasons.filter(r => r.type !== 'full-text').map(r => (

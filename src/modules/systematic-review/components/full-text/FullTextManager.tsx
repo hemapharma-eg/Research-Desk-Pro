@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+// removed unused imports
 import { useSystematicReview } from '../../context/SystematicReviewContext';
 
 export function FullTextManager() {
@@ -7,23 +7,53 @@ export function FullTextManager() {
   // Records that reached full text stage
   const ftQueue = state.records.filter(r => ['full-text-retrieval', 'full-text-screening'].includes(r.stage));
 
-  const attachPdfMock = (recordId: string) => {
-    // In a real electron app, this would open a file dialog. Here we mock it:
-    const fakePath = `/local-storage/pdfs/${recordId}.pdf`;
-    
-    dispatch({ 
-      type: 'UPDATE_RECORD', 
-      payload: { 
-        id: recordId, 
-        updates: { 
-          pdfAttached: true, 
-          pdfPath: fakePath,
-          stage: 'full-text-screening' 
-        } 
+  const attachPdf = async (recordId: string) => {
+    if (window.api?.openPdfDialog) {
+      try {
+        const resultPath = await window.api.openPdfDialog();
+        if (typeof resultPath === 'string') {
+          dispatch({ 
+            type: 'UPDATE_RECORD', 
+            payload: { 
+              id: recordId, 
+              updates: { 
+                pdfAttached: true, 
+                pdfPath: resultPath,
+                stage: 'full-text-screening' 
+              } 
+            }
+          });
+          logEvent('pdf_attached', 'full-text-retrieval', recordId, `Attached PDF: ${resultPath}`);
+        }
+      } catch (e) {
+        console.error("Error attaching PDF:", e);
+        alert("Failed to attach PDF.");
       }
-    });
-
-    logEvent('pdf_attached', 'full-text-retrieval', recordId, `Attached PDF: ${fakePath}`);
+    } else {
+      // Fallback for browser (using standard file input)
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/pdf';
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const fakePath = URL.createObjectURL(file);
+          dispatch({ 
+            type: 'UPDATE_RECORD', 
+            payload: { 
+              id: recordId, 
+              updates: { 
+                pdfAttached: true, 
+                pdfPath: fakePath, 
+                stage: 'full-text-screening' 
+              } 
+            }
+          });
+          logEvent('pdf_attached', 'full-text-retrieval', recordId, `Attached PDF: ${file.name}`);
+        }
+      };
+      input.click();
+    }
   };
 
   const markMissing = (recordId: string) => {
@@ -83,10 +113,9 @@ export function FullTextManager() {
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                       <button 
                         className="sr-btn sr-btn-primary" 
-                        onClick={() => attachPdfMock(r.id)}
-                        disabled={r.pdfAttached}
+                        onClick={() => attachPdf(r.id)}
                       >
-                        Upload PDF
+                        {r.pdfAttached ? 'Update PDF' : 'Upload PDF'}
                       </button>
                       <button 
                         className="sr-btn" 

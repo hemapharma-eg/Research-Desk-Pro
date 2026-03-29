@@ -58,8 +58,10 @@ export function ReferenceManager() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedRef, setSelectedRef] = useState<Reference | null>(null);
   
-  // Modals
+  // Modals & Inline Inputs
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isAddingFolder, setIsAddingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
 
   // Deduplication State
   const [duplicateGroups, setDuplicateGroups] = useState<Reference[][]>([]);
@@ -79,15 +81,13 @@ export function ReferenceManager() {
       if (refsRes.success && refsRes.data) {
         setReferences(refsRes.data);
         
-        // Load mappings for each ref
-        const map: Record<string, string[]> = {};
-        for (const r of refsRes.data) {
-          const mapRes = await window.api.getFoldersByRef(r.id);
-          if (mapRes.success && mapRes.data) {
-            map[r.id] = mapRes.data;
-          }
+        // Load mappings for each ref in a single lightning-fast bulk IPC call!
+        const mapRes = await window.api.getAllFolderMappings();
+        if (mapRes.success && mapRes.data) {
+          setRefFolderMap(mapRes.data);
+        } else {
+          setRefFolderMap({});
         }
-        setRefFolderMap(map);
       }
       
       if (foldersRes.success && foldersRes.data) {
@@ -110,29 +110,24 @@ export function ReferenceManager() {
   // --- ACTIONS ---
   
   const handleImport = async () => {
+    // Optional explicit check:
+    // If no folder is selected, maybe we warn them. But letting it import globally is fine!
     try {
-      const result = await window.api.importReferencesFile();
+      const result = await window.api.importReferencesFile(selectedFolder);
       if (result.success && result.count && result.count > 0) {
+        // Backend handles the folder mapping atomically inside the SQLite loop now.
         await loadData();
-        alert(`Successfully imported ${result.count} references.`);
+        alert(`Successfully imported ${result.count} references${selectedFolder ? ' into the selected folder' : ''}.`);
       } else if (result.error) {
-        setError(result.error);
+        // Only set error if it wasn't just canceled
+        if (!result.canceled) setError(result.error);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error importing references');
     }
   };
 
-  const handleCreateFolder = async () => {
-    const name = prompt('Folder name:');
-    if (!name) return;
-    const res = await window.api.createFolder(name);
-    if (res.success) {
-      loadData();
-    } else {
-      alert(res.error);
-    }
-  };
+
 
   const handleDeleteFolder = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -194,11 +189,12 @@ export function ReferenceManager() {
   };
 
   const handleFindDuplicates = () => {
+    const targetRefs = selectedFolder ? filteredReferences : references;
     const groups: Reference[][] = [];
     const seenDoi = new Map<string, Reference>();
     const seenTitle = new Map<string, Reference>();
     
-    references.forEach(r => {
+    targetRefs.forEach(r => {
       let isDup = false;
       if (r.doi) {
         const d = r.doi.trim().toLowerCase();
@@ -333,8 +329,50 @@ export function ReferenceManager() {
           
           <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase' }}>My Folders</span>
-            <button onClick={handleCreateFolder} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: '16px' }}>+</button>
+            <button 
+              onClick={() => { setIsAddingFolder(true); setNewFolderName(''); }} 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: '16px', padding: '0 4px' }}
+            >+</button>
           </div>
+          
+          {isAddingFolder && (
+            <div style={{ margin: '8px 0', padding: '6px', borderRadius: '4px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', display: 'flex', gap: '4px' }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Folder name..."
+                value={newFolderName}
+                onChange={e => setNewFolderName(e.target.value)}
+                style={{ flex: 1, padding: '4px', fontSize: '12px', border: '1px solid #CBD5E1', borderRadius: '2px', outline: 'none' }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!newFolderName.trim()) {
+                      setIsAddingFolder(false);
+                      return;
+                    }
+                    const res = await window.api.createFolder(newFolderName.trim());
+                    if (res.success && res.data) {
+                      setNewFolderName('');
+                      setIsAddingFolder(false);
+                      setSelectedFolder(res.data.id); // Auto-select the newly created folder
+                      loadData();
+                    } else {
+                      alert(res.error);
+                    }
+                  } else if (e.key === 'Escape') {
+                    setIsAddingFolder(false);
+                    setNewFolderName('');
+                  }
+                }}
+              />
+              <button 
+                onClick={() => setIsAddingFolder(false)} 
+                style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '12px' }}
+              >✕</button>
+            </div>
+          )}
+          
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '8px' }}>
             {folders.map(f => (
               <div 
@@ -388,7 +426,9 @@ export function ReferenceManager() {
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button onClick={handleCreateNewRefModal} style={styles.btnSecondary}>+ Add New</button>
-            <button onClick={handleImport} style={styles.btnSecondary}>📥 Import RIS/Bib</button>
+            <button onClick={handleImport} style={{ ...styles.btnSecondary, backgroundColor: selectedFolder ? 'var(--color-accent-primary)' : 'var(--color-bg-hover)', color: selectedFolder ? 'white' : 'var(--color-text-primary)' }}>
+              📥 {selectedFolder ? `Import into Selected Folder` : `Import Globally`}
+            </button>
             <button onClick={handleFindDuplicates} style={{ ...styles.btnSecondary, color: '#059669', borderColor: '#34D399' }}>🔄 Find Duplicates</button>
             <button onClick={handleExportLibrary} style={styles.btnSecondary}>📤 Export Library</button>
           </div>

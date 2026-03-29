@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
-import type { ReviewRecord, Conflict } from '../../types/ReviewModels';
+// Types only
 
 export function ConflictResolutionCenter() {
   const { state, dispatch, logEvent } = useSystematicReview();
   
-  // Resolve mock / pending conflicts derived from records
-  const conflicts = state.conflicts.filter(c => c.status === 'pending');
   
   // For UI mockup completeness without rigorous dual screening mocked backend:
   // If no explicit conflicts exist, we will extract any record tagged 'maybe' or stage 'conflict-resolution' implicitly.
@@ -61,15 +59,15 @@ export function ConflictResolutionCenter() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100%', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       
       {/* List Queue Panel */}
-      <div style={{ width: 250, borderRight: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', background: 'var(--color-bg-primary)' }}>
+      <div style={{ width: 250, flexShrink: 0, borderRight: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', background: 'var(--color-bg-primary)', height: '100%', minHeight: 0 }}>
         <div style={{ padding: 16, borderBottom: '1px solid var(--color-border-light)' }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>Open Conflicts ({implicitConflictRecords.length})</h3>
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {implicitConflictRecords.map((r, i) => (
+          {implicitConflictRecords.map((r) => (
              <div 
                key={r.id} 
                onClick={() => setActiveRecordId(r.id)}
@@ -91,7 +89,7 @@ export function ConflictResolutionCenter() {
       </div>
 
       {/* Main Resolution Panel */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--color-bg-subtle)', overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg-subtle)', height: '100%', minHeight: 0 }}>
         
         <div style={{ padding: 32 }}>
           <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>

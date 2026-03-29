@@ -1,56 +1,113 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
 import { v4 as uuidv4 } from 'uuid';
 import type { ReviewRecord } from '../../types/ReviewModels';
+import { Cite } from '@citation-js/core';
+import '@citation-js/plugin-ris';
+import '@citation-js/plugin-bibtex';
 
 export function ImportWorkspace() {
   const { state, dispatch, logEvent } = useSystematicReview();
   const [sourceName, setSourceName] = useState('PubMed');
   const [format, setFormat] = useState<'RIS' | 'BibTeX' | 'CSV'>('RIS');
   const [rawText, setRawText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.toLowerCase().endsWith('.ris')) setFormat('RIS');
+    else if (file.name.toLowerCase().endsWith('.bib') || file.name.toLowerCase().endsWith('.bibtex')) setFormat('BibTeX');
+    else if (file.name.toLowerCase().endsWith('.csv')) setFormat('CSV');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result;
+      if (typeof result === 'string') {
+        setRawText(result);
+      }
+    };
+    reader.readAsText(file);
+    
+    // reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleImport = () => {
     if (!rawText.trim()) return;
     
-    // Very naive mock parser just to demonstrate data flow without building a full RIS parser
-    // Real implementation would use something like `citation-js` or a custom parser.
-    const mockRecords: ReviewRecord[] = rawText.split('\n\n').filter(b => b.trim().length > 10).map((block, i) => ({
-      id: uuidv4(),
-      title: block.substring(0, 50).replace(/TI  - |title=|@article{/gi, '') + (block.length > 50 ? '...' : ''),
-      abstract: 'Abstract parsed from raw text block. Length: ' + block.length,
-      authors: 'Author ' + (i + 1),
-      year: new Date().getFullYear(),
-      journal: sourceName + ' Journal',
-      volume: '1', issue: '1', pages: '1-10',
-      doi: `10.1234/sr.mock.${Date.now()}.${i}`,
-      pmid: `${Date.now()}`.slice(-8),
-      pmcid: '',
-      keywords: ['mock', format, sourceName],
-      meshTerms: [],
-      publicationType: 'Journal Article',
-      language: 'English',
-      urls: [],
-      sourceDatabase: sourceName,
-      sourceBatch: `Batch-${new Date().toISOString().split('T')[0]}`,
-      importTimestamp: new Date().toISOString(),
-      pdfAttached: false,
-      supplementaryFiles: [],
-      stage: 'title-abstract-screening',
-      dedupClusterId: null,
-      dedupStatus: 'pending',
-      titleAbstractDecisions: {},
-      fullTextDecisions: {},
-      conflictStatus: 'none',
-      finalDisposition: 'pending',
-      topicTags: [],
-      userLabels: [],
-      flags: []
-    }));
+    try {
+      const cite = new Cite(rawText);
+      const records = cite.data;
 
-    dispatch({ type: 'ADD_RECORDS', payload: mockRecords });
-    logEvent('records_imported', 'import', undefined, `Imported ${mockRecords.length} records via ${format} from ${sourceName}`);
-    setRawText('');
-    alert(`Successfully parsed and imported ${mockRecords.length} records.`);
+      if (!records || records.length === 0) {
+        alert('No valid records found or could not be parsed.');
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parsedRecords: ReviewRecord[] = records.map((record: any) => {
+        let authorsStr = '';
+        if (record.author && Array.isArray(record.author)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          authorsStr = record.author.map((a: any) => `${a.family || ''}${a.given ? ', ' + a.given : ''}`).filter(Boolean).join('; ');
+        }
+
+        let kw: string[] = [];
+        if (record.keyword) {
+          if (typeof record.keyword === 'string') {
+            kw = record.keyword.split(',').map((k: string) => k.trim());
+          } else if (Array.isArray(record.keyword)) {
+            kw = record.keyword;
+          }
+        }
+
+        return {
+          id: uuidv4(),
+          title: record.title || 'Untitled',
+          abstract: record.abstract || '',
+          authors: authorsStr,
+          year: record.issued?.['date-parts']?.[0]?.[0] || new Date().getFullYear(),
+          journal: record['container-title'] || '',
+          volume: record.volume || '',
+          issue: record.issue || '',
+          pages: record.page || '',
+          doi: record.DOI || '',
+          pmid: record.PMID || '',
+          pmcid: record.PMCID || '',
+          keywords: kw,
+          meshTerms: [],
+          publicationType: record.type || 'Journal Article',
+          language: record.language || 'English',
+          urls: record.URL ? [record.URL] : [],
+          sourceDatabase: sourceName,
+          sourceBatch: `Batch-${new Date().toISOString().split('T')[0]}`,
+          importTimestamp: new Date().toISOString(),
+          pdfAttached: false,
+          supplementaryFiles: [],
+          stage: 'title-abstract-screening',
+          dedupClusterId: null,
+          dedupStatus: 'pending',
+          titleAbstractDecisions: {},
+          fullTextDecisions: {},
+          conflictStatus: 'none',
+          finalDisposition: 'pending',
+          topicTags: [],
+          userLabels: [],
+          flags: []
+        };
+      });
+
+      dispatch({ type: 'ADD_RECORDS', payload: parsedRecords });
+      logEvent('records_imported', 'import', undefined, `Imported ${parsedRecords.length} records via ${format} from ${sourceName}`);
+      setRawText('');
+      alert(`Successfully parsed and imported ${parsedRecords.length} records.`);
+    } catch (err: any) {
+      alert(`Error parsing records: ${err.message}`);
+    }
   };
 
   return (
@@ -59,7 +116,28 @@ export function ImportWorkspace() {
         
         {/* Import Form */}
         <div className="sr-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: 18 }}>Import Records</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: 18 }}>Import Records</h2>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept=".ris,.bib,.csv,.txt"
+              onChange={handleFileUpload}
+            />
+            <button 
+              className="sr-btn" 
+              onClick={() => fileInputRef.current?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--color-bg-subtle)' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Upload File
+            </button>
+          </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>

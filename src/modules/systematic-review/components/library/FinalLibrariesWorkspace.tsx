@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
 
 export function FinalLibrariesWorkspace() {
@@ -69,7 +69,13 @@ export function FinalLibrariesWorkspace() {
                         </span>
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <button className="sr-btn" style={{ fontSize: 11 }}>Send to Extractor</button>
+                        <button 
+                          className="sr-btn" 
+                          style={{ fontSize: 11 }}
+                          onClick={() => alert('Data Extractor module is currently under development. This study will be queued for extraction.')}
+                        >
+                          Send to Extractor
+                        </button>
                       </td>
                     </tr>
                   ))

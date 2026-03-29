@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import './SystematicReview.css';
 import { SystematicReviewProvider, useSystematicReview } from './context/SystematicReviewContext';
 import type { ReviewStage } from './types/ReviewModels';
@@ -36,7 +36,7 @@ const NAV_ITEMS: { id: ReviewStage | 'dashboard' | 'libraries' | 'export' | 'set
 ];
 
 function SystematicReviewContent() {
-  const { state, dispatch } = useSystematicReview();
+  const { state } = useSystematicReview();
   const [currentNav, setCurrentNav] = useState<string>('dashboard');
 
   const renderContent = () => {
@@ -98,7 +98,14 @@ function SystematicReviewContent() {
                 <span style={{fontSize: 10, opacity: 0.7}}>({state.activeReviewer.role})</span>
               </div>
             )}
-            <button className="sr-btn" onClick={() => {/* force save logic */}}>
+            <button className="sr-btn" onClick={() => {
+              if (state.project) {
+                localStorage.setItem('sr_app_state', JSON.stringify(state));
+                alert('Project saved successfully!');
+              } else {
+                alert('No active project to save.');
+              }
+            }}>
               {state.isSaving ? 'Saving...' : '💾 Save'}
             </button>
           </div>
