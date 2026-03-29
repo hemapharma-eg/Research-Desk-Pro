@@ -60,5 +60,20 @@ contextBridge.exposeInMainWorld('api', {
   importCSVFile: () => ipcRenderer.invoke('graphing:importCSVFile'),
 
   // Utilities
-  readFileBase64: (filePath) => ipcRenderer.invoke('file:readBase64', filePath)
+  readFileBase64: (filePath) => ipcRenderer.invoke('file:readBase64', filePath),
+
+  // Systematic Review
+  getExtractionTemplates: () => ipcRenderer.invoke('systematic:getExtractionTemplates'),
+  createExtractionTemplate: (data) => ipcRenderer.invoke('systematic:createExtractionTemplate', data),
+  deleteExtractionTemplate: (id) => ipcRenderer.invoke('systematic:deleteExtractionTemplate', id),
+  getExtractedDataPoints: (refId) => ipcRenderer.invoke('systematic:getExtractedDataPoints', refId),
+  saveExtractedDataPoint: (data) => ipcRenderer.invoke('systematic:saveExtractedDataPoint', data),
+  getRobAssessments: (refId) => ipcRenderer.invoke('systematic:getRobAssessments', refId),
+  saveRobAssessment: (data) => ipcRenderer.invoke('systematic:saveRobAssessment', data),
+  getReviewerDecisions: (refId) => ipcRenderer.invoke('systematic:getReviewerDecisions', refId),
+  saveReviewerDecision: (data) => ipcRenderer.invoke('systematic:saveReviewerDecision', data),
+  autoFetchPDFs: (refs, email) => ipcRenderer.invoke('systematic:autoFetchPDFs', refs, email),
+  exportCollaborationData: (reviewerId) => ipcRenderer.invoke('systematic:exportCollaborationData', reviewerId),
+  importCollaborationData: () => ipcRenderer.invoke('systematic:importCollaborationData'),
+  exportToGraphingStudio: (refs) => ipcRenderer.invoke('systematic:exportToGraphingStudio', refs)
 });

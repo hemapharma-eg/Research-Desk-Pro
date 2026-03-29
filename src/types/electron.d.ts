@@ -146,6 +146,25 @@ export interface ElectronAPI {
   exportGraphingFigure: (imageDataUrl: string, defaultName: string, format: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
 
   importCSVFile: () => Promise<{ success: boolean; data?: { content: string; fileName: string; filePath: string }; canceled?: boolean; error?: string }>;
+
+  // Systematic Review Extensions
+  getExtractionTemplates: () => Promise<{ success: boolean; data?: ExtractionTemplate[]; error?: string }>;
+  createExtractionTemplate: (data: Partial<ExtractionTemplate>) => Promise<{ success: boolean; data?: ExtractionTemplate; error?: string }>;
+  deleteExtractionTemplate: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getExtractedDataPoints: (refId?: string) => Promise<{ success: boolean; data?: ExtractedDataPoint[]; error?: string }>;
+  saveExtractedDataPoint: (data: Partial<ExtractedDataPoint>) => Promise<{ success: boolean; data?: ExtractedDataPoint; error?: string }>;
+  
+  getRobAssessments: (refId?: string) => Promise<{ success: boolean; data?: RobAssessment[]; error?: string }>;
+  saveRobAssessment: (data: Partial<RobAssessment>) => Promise<{ success: boolean; data?: RobAssessment; error?: string }>;
+  
+  getReviewerDecisions: (refId?: string) => Promise<{ success: boolean; data?: ReviewerDecision[]; error?: string }>;
+  saveReviewerDecision: (data: Partial<ReviewerDecision>) => Promise<{ success: boolean; data?: ReviewerDecision; error?: string }>;
+
+  autoFetchPDFs: (refs: any[], email: string) => Promise<{ success: boolean; results?: { successCount: number; failedCount: number; successfulFetches?: {id:string, pdfPath:string}[] }; error?: string }>;
+
+  exportCollaborationData: (reviewerId: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+  importCollaborationData: () => Promise<{ success: boolean; stats?: any; canceled?: boolean; error?: string }>;
+  exportToGraphingStudio: (refs: any[]) => Promise<{ success: boolean; datasetId?: string | number; error?: string }>;
 }
 
 // Graphing Studio DB Row Types
@@ -181,6 +200,42 @@ export interface GraphingFigureRow {
   thumbnail_dataurl: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Systematic Review DB Row Types
+export interface ExtractionTemplate {
+  id: string;
+  name: string;
+  fields_json: string;
+}
+
+export interface ExtractedDataPoint {
+  id: string;
+  ref_id: string;
+  reviewer_id: string | null;
+  template_id: string;
+  data_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RobAssessment {
+  id: string;
+  ref_id: string;
+  reviewer_id: string | null;
+  tool_used: string;
+  domain_scores_json: string;
+  overall_risk: string;
+  created_at: string;
+}
+
+export interface ReviewerDecision {
+  ref_id: string;
+  reviewer_id: string;
+  stage: string;
+  decision: string;
+  notes: string | null;
+  timestamp: string;
 }
 
 declare global {

@@ -5,7 +5,7 @@ import {
   runMannWhitneyU, runWilcoxonSignedRank, runKruskalWallis, runFriedmanTest,
   runChiSquareGoF, runChiSquareIndependence, runFisherExact2x2,
   runPearsonCorrelation, runSpearmanCorrelation, runSimpleLinearRegression,
-  runKaplanMeier, runROCAnalysis,
+  runKaplanMeier, runROCAnalysis, runMetaAnalysis,
   cleanData, type StatTestResult, type SurvivalDataPoint, type CorrectionMethod
 } from '../../utils/statService';
 
@@ -15,7 +15,7 @@ interface AnalysisWizardProps {
   onRunTest: (result: StatTestResult) => void;
 }
 
-type TestFamily = 'comparison' | 'anova' | 'nonparam' | 'correlation' | 'categorical' | 'survival' | 'dose-response';
+type TestFamily = 'comparison' | 'anova' | 'nonparam' | 'correlation' | 'categorical' | 'survival' | 'dose-response' | 'meta-analysis';
 
 const TEST_FAMILIES: { id: TestFamily; label: string; icon: string; desc: string }[] = [
   { id: 'comparison', label: 'Comparison', icon: '⚖️', desc: 't-tests, paired & unpaired' },
@@ -25,6 +25,7 @@ const TEST_FAMILIES: { id: TestFamily; label: string; icon: string; desc: string
   { id: 'dose-response', label: 'Dose-Response', icon: '💊', desc: 'IC50/EC50 Non-linear sigmoidal fit' },
   { id: 'categorical', label: 'Categorical', icon: '📋', desc: 'Chi-square, Fisher\'s exact' },
   { id: 'survival', label: 'Survival & ROC', icon: '📉', desc: 'Kaplan-Meier, Log-rank, ROC/AUC' },
+  { id: 'meta-analysis', label: 'Meta-Analysis', icon: '🌲', desc: 'Forest plot, fixed/random effects' },
 ];
 
 export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardProps) {
@@ -35,6 +36,7 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
   const [isWelch, setIsWelch] = useState(false);
   const [oneTailed, setOneTailed] = useState<'none' | 'greater' | 'less'>('none');
   const [calculateSimpleEffects, setCalculateSimpleEffects] = useState(false);
+  const [metaModel, setMetaModel] = useState<'fixed' | 'random'>('random');
   const [error, setError] = useState<string | null>(null);
 
   const getGroups = useCallback(() => {
@@ -218,6 +220,31 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
         }
         return;
       }
+
+      // Meta-Analysis
+      if (family === 'meta-analysis') {
+        // Column 1: Study names (use row names or first column as labels)
+        // Column 2: Effect sizes
+        // Column 3: Standard errors
+        if (groups.length < 2) throw new Error('Meta-analysis requires at least 2 columns: Effect Size, Standard Error. Optionally use row names for study labels.');
+
+        const effectSizes = groups[0].data;
+        const standardErrors = groups[1].data;
+        const minLen = Math.min(effectSizes.length, standardErrors.length);
+
+        // Generate study names from row names or sequential
+        const studyNames = dataset.rows.slice(0, minLen).map((r, i) =>
+          r.rowName || `Study ${i + 1}`
+        );
+
+        onRunTest(runMetaAnalysis(
+          studyNames,
+          effectSizes.slice(0, minLen),
+          standardErrors.slice(0, minLen),
+          metaModel
+        ));
+        return;
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
     }
@@ -244,6 +271,7 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
                 if (tf.id === 'categorical') setTestVariant('chi-square');
                 if (tf.id === 'survival') setTestVariant('kaplan-meier');
                 if (tf.id === 'dose-response') setTestVariant('ic50');
+                if (tf.id === 'meta-analysis') setTestVariant('forest');
               }}
             >
               <span>{tf.icon}</span>
@@ -388,6 +416,26 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
               {testVariant === 'kaplan-meier'
                 ? 'Columns: Time (col 1), Event 0/1 (col 2), optionally Group (col 3) for log-rank comparison.'
                 : 'Columns: Test values (col 1), True labels 0/1 (col 2).'}
+            </div>
+          </>
+        )}
+
+        {family === 'meta-analysis' && (
+          <>
+            <select className="gs-select" value={testVariant} onChange={e => setTestVariant(e.target.value)} style={{ marginBottom: '8px' }}>
+              <option value="forest">Inverse-Variance Weighted Meta-Analysis</option>
+            </select>
+            <div className="gs-form-group">
+              <label className="gs-label">Model</label>
+              <select className="gs-select" value={metaModel} onChange={e => setMetaModel(e.target.value as 'fixed' | 'random')}>
+                <option value="random">Random-Effects (DerSimonian-Laird)</option>
+                <option value="fixed">Fixed-Effect (Inverse Variance)</option>
+              </select>
+            </div>
+            <div className="gs-recommendation" style={{ fontSize: '11px' }}>
+              <strong>Data format:</strong> Column 1 = Effect Sizes (e.g. SMD, logOR, mean difference), Column 2 = Standard Errors. Use row names for study labels.
+              <br /><br />
+              <strong>Tip:</strong> After running the analysis, switch to the <strong>Graph</strong> tab and select <strong>Forest Plot</strong> from the chart type dropdown.
             </div>
           </>
         )}

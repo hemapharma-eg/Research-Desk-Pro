@@ -16,10 +16,13 @@ import { FinalLibrariesWorkspace } from './components/library/FinalLibrariesWork
 import { PrismaReporting } from './components/reporting/PrismaReporting';
 import { ExportCenter } from './components/export/ExportCenter';
 import { ActivityLogWorkspace } from './components/governance/ActivityLogWorkspace';
+import { DataExtractorWorkspace } from './components/extraction/DataExtractorWorkspace';
+import { RiskOfBiasWorkspace } from './components/rob/RiskOfBiasWorkspace';
+import { CollaborationCenter } from './components/governance/CollaborationCenter';
 
 // Dummy imports - to be implemented
 
-const NAV_ITEMS: { id: ReviewStage | 'dashboard' | 'libraries' | 'export' | 'settings' | 'raw-records'; label: string; icon: string }[] = [
+const NAV_ITEMS: { id: ReviewStage | 'dashboard' | 'libraries' | 'export' | 'settings' | 'raw-records' | 'data-extraction' | 'risk-of-bias' | 'collaboration'; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Overview', icon: '📊' },
   { id: 'setup', label: 'Setup', icon: '⚙️' },
   { id: 'import', label: 'Imports', icon: '📥' },
@@ -28,7 +31,10 @@ const NAV_ITEMS: { id: ReviewStage | 'dashboard' | 'libraries' | 'export' | 'set
   { id: 'title-abstract-screening', label: 'Title/Abstract', icon: '📑' },
   { id: 'full-text-retrieval', label: 'Full Text Manager', icon: '📄' },
   { id: 'full-text-screening', label: 'Full Text Screening', icon: '🔍' },
+  { id: 'data-extraction', label: 'Data Extractor', icon: '📑' },
+  { id: 'risk-of-bias', label: 'Risk of Bias', icon: '🚦' },
   { id: 'conflict-resolution', label: 'Conflicts', icon: '⚖️' },
+  { id: 'collaboration', label: 'Collaboration', icon: '🤝' },
   { id: 'libraries', label: 'Libraries (Inc/Exc)', icon: '📚' },
   { id: 'reporting', label: 'Reports & PRISMA', icon: '📈' },
   { id: 'export', label: 'Export', icon: '📤' },
@@ -49,7 +55,10 @@ function SystematicReviewContent() {
       case 'title-abstract-screening': return <TitleAbstractScreening />;
       case 'full-text-retrieval': return <FullTextManager />;
       case 'full-text-screening': return <FullTextScreeningWorkspace />;
+      case 'data-extraction': return <DataExtractorWorkspace />;
+      case 'risk-of-bias': return <RiskOfBiasWorkspace />;
       case 'conflict-resolution': return <ConflictResolutionCenter />;
+      case 'collaboration': return <CollaborationCenter />;
       case 'libraries': return <FinalLibrariesWorkspace />;
       case 'reporting': return <PrismaReporting />;
       case 'export': return <ExportCenter />;

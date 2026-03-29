@@ -74,6 +74,7 @@ const CHART_TYPES: { value: ChartType; label: string; group: string }[] = [
   { value: 'bar-points', label: 'Bar + Individual Points', group: 'Overlay' },
   { value: 'box-points', label: 'Box + Individual Points', group: 'Overlay' },
   { value: 'violin-points', label: 'Violin + Individual Points', group: 'Overlay' },
+  { value: 'forest', label: 'Forest Plot', group: 'Meta-Analysis' },
 ];
 
 const PALETTES: { name: string; colors: string[] }[] = [
@@ -125,7 +126,7 @@ export function GraphStyleController({ options, groupNames = [], onChange }: Gra
                 value={options.chartType}
                 onChange={e => update({ chartType: e.target.value as ChartType })}
               >
-                {['Basic', 'Distribution', 'Paired', 'Overlay'].map(group => (
+                {['Basic', 'Distribution', 'Paired', 'Overlay', 'Meta-Analysis'].map(group => (
                   <optgroup key={group} label={group}>
                     {CHART_TYPES.filter(ct => ct.group === group).map(ct => (
                       <option key={ct.value} value={ct.value}>{ct.label}</option>

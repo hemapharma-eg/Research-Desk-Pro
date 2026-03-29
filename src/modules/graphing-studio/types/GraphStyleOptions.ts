@@ -9,7 +9,8 @@ export type ChartType =
   | 'box' | 'violin'
   | 'histogram' | 'dot-plot' | 'strip-plot'
   | 'before-after' | 'slope-graph'
-  | 'bar-points' | 'box-points' | 'violin-points' | 'dose-response';
+  | 'bar-points' | 'box-points' | 'violin-points' | 'dose-response'
+  | 'forest';
 
 export type ErrorBarType = 'none' | 'SD' | 'SEM' | 'CI95';
 export type AnnotationStyle = 'stars' | 'p-value' | 'letters';

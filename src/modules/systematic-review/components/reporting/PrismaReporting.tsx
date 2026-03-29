@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -8,6 +8,18 @@ export function PrismaReporting() {
   const diagramRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [includeMetadata, setIncludeMetadata] = useState(false);
+  
+  // RoB State
+  const robPlotRef = useRef<HTMLDivElement>(null);
+  const [robAssessments, setRobAssessments] = useState<any[]>([]);
+  const [showRobPlot, setShowRobPlot] = useState(false);
+  const [isExportingRob, setIsExportingRob] = useState(false);
+
+  useEffect(() => {
+    window.api.getRobAssessments().then(res => {
+      if (res.success && res.data) setRobAssessments(res.data);
+    });
+  }, []);
 
   // 1. Identification
   const totalImported = state.records.length;
@@ -42,26 +54,36 @@ export function PrismaReporting() {
     setIsExporting(true);
     
     try {
-      // Capture the element as a high-res image
       const canvas = await html2canvas(diagramRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'px',
-        format: 'a4'
-      });
-      
+      const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`PRISMA_Diagram_${state.project?.shortTitle?.replace(/\\s+/g, '_') || 'Review'}.pdf`);
+      pdf.save(`PRISMA_Diagram_${state.project?.shortTitle?.replace(/\s+/g, '_') || 'Review'}.pdf`);
     } catch (err) {
       console.error('Failed to export PDF:', err);
-      alert('Failed to generate PDF. See console for details.');
+      alert('Failed to generate PDF.');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const exportRobPlotPDF = async () => {
+    if (!robPlotRef.current) return;
+    setIsExportingRob(true);
+    try {
+      const canvas = await html2canvas(robPlotRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'l', unit: 'px', format: 'a4' });
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`RoB_Traffic_Light_${state.project?.shortTitle?.replace(/\s+/g, '_') || 'Review'}.pdf`);
+    } catch (err) {
+      console.error('Failed to export RoB PDF:', err);
+    } finally {
+      setIsExportingRob(false);
     }
   };
 
@@ -89,12 +111,20 @@ export function PrismaReporting() {
                />
                Stamp Project Metadata
              </label>
+             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+               <input 
+                 type="checkbox" 
+                 checked={showRobPlot} 
+                 onChange={e => setShowRobPlot(e.target.checked)} 
+               />
+               Show RoB Plot
+             </label>
              <button 
                className="sr-btn sr-btn-primary" 
-               onClick={exportPDF}
-               disabled={isExporting}
+               onClick={showRobPlot ? exportRobPlotPDF : exportPDF}
+               disabled={isExporting || isExportingRob}
              >
-               {isExporting ? 'Generating PDF...' : 'Export as PDF'}
+               {isExporting || isExportingRob ? 'Generating PDF...' : (showRobPlot ? 'Export RoB PDF' : 'Export PRISMA PDF')}
              </button>
            </div>
          </div>
@@ -220,6 +250,57 @@ export function PrismaReporting() {
              </div>
            </div>
          </div>
+
+         {/* Traffic Light Plot */}
+         {showRobPlot && (
+           <div style={{ marginTop: 40, overflowX: 'auto', background: '#ffffff', borderRadius: 8, border: '1px solid var(--color-border-light)' }}>
+             <div ref={robPlotRef} style={{ padding: '40px', fontFamily: 'Arial, sans-serif', background: '#ffffff', minWidth: '100%' }}>
+               <h3 style={{ textAlign: 'center', marginBottom: 30, color: '#334e68' }}>Risk of Bias Assessment (Traffic Light Plot)</h3>
+               
+               {robAssessments.length === 0 ? (
+                 <div style={{ textAlign: 'center', color: '#888' }}>No Risk of Bias assessments found.</div>
+               ) : (
+                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                   <thead>
+                     <tr>
+                       <th style={{ padding: 10, borderBottom: '2px solid #ddd', textAlign: 'left', width: 200 }}>Study</th>
+                       <th style={{ padding: 10, borderBottom: '2px solid #ddd', textAlign: 'center' }}>Total Risk</th>
+                       {/* Map dynamic columns based on the first assessment's domains */}
+                       {Object.keys(JSON.parse(robAssessments[0].domain_scores_json || '{}')).map((dId, idx) => (
+                         <th key={dId} style={{ padding: 10, borderBottom: '2px solid #ddd', textAlign: 'center' }}>D{idx + 1}</th>
+                       ))}
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {robAssessments.map(a => {
+                       const record = state.records.find(r => r.id === a.ref_id);
+                       const scores = JSON.parse(a.domain_scores_json || '{}');
+                       const getBlobColor = (val: string) => val === 'Low' ? '#c8e6c9' : val === 'High' ? '#ffccbc' : val === 'Some Concerns' ? '#fff9c4' : '#eee';
+                       const Blob = ({ val }: { val: string }) => (
+                         <div style={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: getBlobColor(val), margin: '0 auto', border: '1px solid rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                           {val === 'Low' ? '＋' : val === 'High' ? '－' : '?'}
+                         </div>
+                       );
+                       return (
+                         <tr key={a.id}>
+                           <td style={{ padding: 12, borderBottom: '1px solid #eee' }}><strong>{record?.authors?.split(',')[0]}</strong> et al., {record?.year}</td>
+                           <td style={{ padding: 12, borderBottom: '1px solid #eee', textAlign: 'center', fontWeight: 'bold' }}>
+                             <span style={{ padding: '4px 8px', borderRadius: 4, backgroundColor: getBlobColor(a.overall_risk) }}>{a.overall_risk}</span>
+                           </td>
+                           {Object.keys(scores).map(dId => (
+                             <td key={dId} style={{ padding: 12, borderBottom: '1px solid #eee', textAlign: 'center' }}>
+                               <Blob val={scores[dId]} />
+                             </td>
+                           ))}
+                         </tr>
+                       );
+                     })}
+                   </tbody>
+                 </table>
+               )}
+             </div>
+           </div>
+         )}
       </div>
     </div>
   );

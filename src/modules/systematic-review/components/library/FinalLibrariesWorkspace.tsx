@@ -4,6 +4,7 @@ import { useSystematicReview } from '../../context/SystematicReviewContext';
 export function FinalLibrariesWorkspace() {
   const { state, dispatch } = useSystematicReview();
   const [activeTab, setActiveTab] = useState<'included' | 'excluded'>('included');
+  const [isExporting, setIsExporting] = useState(false);
 
   const included = state.records.filter(r => r.finalDisposition === 'included');
   const excluded = state.records.filter(r => r.finalDisposition === 'excluded');
@@ -11,6 +12,23 @@ export function FinalLibrariesWorkspace() {
   const getReasonLabel = (reasonId?: string) => {
     if (!reasonId) return 'No reason provided';
     return state.project?.exclusionReasons.find(r => r.id === reasonId)?.label || 'Unknown Reason';
+  };
+
+  const handleExportGraphing = async () => {
+    setIsExporting(true);
+    try {
+      const res = await window.api.exportToGraphingStudio(included);
+      if (res.success) {
+        alert('Successfully exported to Graphing Studio! You can now analyze this dataset in the Statistical Analysis workspace.');
+      } else {
+        alert('Export failed: ' + res.error);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to export dataset.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -30,6 +48,19 @@ export function FinalLibrariesWorkspace() {
         >
           Excluded Studies ({excluded.length})
         </button>
+
+        <div style={{ flex: 1 }}></div>
+
+        {activeTab === 'included' && included.length > 0 && (
+          <button 
+            className="sr-btn sr-btn-primary" 
+            onClick={handleExportGraphing}
+            disabled={isExporting}
+            style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            {isExporting ? 'Exporting...' : '📊 Generate Meta-Analysis Dataset'}
+          </button>
+        )}
       </div>
 
       <div className="sr-card" style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import type { PublicationDataset, VariableMapping } from '../../types/GraphingCoreTypes';
 import type { GraphStyleOptions } from '../../types/GraphStyleOptions';
-import type { StatTestResult } from '../../utils/statService';
+import type { StatTestResult, MetaAnalysisResult } from '../../utils/statService';
 import { getDescriptives, cleanData } from '../../utils/statService';
 import { jStat } from 'jstat';
 
@@ -15,6 +15,11 @@ interface AdvancedGraphViewerProps {
   mapping: VariableMapping;
   options: GraphStyleOptions;
   statResult?: StatTestResult | null;
+}
+
+// Type guard
+function isMetaAnalysisResult(r: any): r is MetaAnalysisResult {
+  return r && 'studies' in r && 'pooledEffect' in r && 'heterogeneity' in r;
 }
 
 interface ChartDataPoint {
@@ -155,7 +160,7 @@ function CustomBarWithErrors(props: any) {
   );
 }
 
-export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraphViewerProps) {
+export function AdvancedGraphViewer({ dataset, mapping, options, statResult }: AdvancedGraphViewerProps) {
   const chartData = useMemo(() => {
     return mapping.dependentParamIds.map((colId, idx) => {
       const col = dataset.columns.find(c => c.id === colId);
@@ -474,6 +479,11 @@ export function AdvancedGraphViewer({ dataset, mapping, options }: AdvancedGraph
     return renderStripPlot(chartData, options, colorPalette, chartType === 'strip-plot');
   }
 
+  // --- FOREST PLOT ---
+  if (chartType === 'forest') {
+    return renderForestPlot(chartData, options, colorPalette, statResult);
+  }
+
   // Fallback : bar chart
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)' }}>
@@ -761,6 +771,266 @@ function renderStripPlot(data: ChartDataPoint[], options: GraphStyleOptions, pal
             </g>
           );
         })}
+      </svg>
+    </div>
+  );
+}
+
+function renderForestPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], statResult?: StatTestResult | null) {
+  const meta = statResult && isMetaAnalysisResult(statResult) ? statResult : null;
+  const studies: { name: string; effect: number; ci_lower: number; ci_upper: number; weight: number; se: number }[] = [];
+  let pooled: { effect: number; ci_lower: number; ci_upper: number } | null = null;
+  let hetStats: { I2: number; Q: number; df: number; pValue: number; tau2: number } | null = null;
+  let modelLabel = '';
+  let pooledZ = 0, pooledP = 0;
+
+  if (meta) {
+    meta.studies.forEach(s => {
+      studies.push({ name: s.name, effect: s.effectSize, ci_lower: s.ci_lower, ci_upper: s.ci_upper, weight: s.weight, se: s.se });
+    });
+    pooled = { effect: meta.pooledEffect, ci_lower: meta.pooledCI_lower, ci_upper: meta.pooledCI_upper };
+    hetStats = meta.heterogeneity;
+    modelLabel = meta.model === 'random' ? 'Overall (Random-Effects)' : 'Overall (Fixed-Effect)';
+    pooledZ = meta.statisticValue;
+    pooledP = meta.mainPValue;
+  } else if (data.length >= 1) {
+    data.forEach(d => {
+      studies.push({ name: d.name, effect: d.mean, ci_lower: d.ci95_lower, ci_upper: d.ci95_upper, weight: 100 / data.length, se: d.sem });
+    });
+    if (data.length > 1) {
+      const mp = data.reduce((s, d) => s + d.mean, 0) / data.length;
+      pooled = { effect: mp, ci_lower: mp - data[0].sem * 1.96, ci_upper: mp + data[0].sem * 1.96 };
+    }
+    modelLabel = 'Overall';
+  }
+
+  if (studies.length === 0) {
+    return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Run a meta-analysis first, or map columns with effect sizes.</div>;
+  }
+
+  // ────────────────────────────────────────────────
+  // LAYOUT — Publication-grade Cochrane/RevMan style
+  // ────────────────────────────────────────────────
+  // Zones (x): Study [0..190] | Weight [192..250] | Plot [270..730] | ES [95% CI] [745..960]
+  const W = 970;
+  const ROW_H = 28;
+  const nStudies = studies.length;
+  const HEADER_Y = 38;
+  const BODY_TOP = HEADER_Y + 18;
+  const bodyRows = nStudies + (pooled ? 1 : 0);
+  const BODY_BOTTOM = BODY_TOP + bodyRows * ROW_H;
+  const AXIS_Y = BODY_BOTTOM + 6;
+  const FOOTER_Y = AXIS_Y + 52;
+  const H = FOOTER_Y + (hetStats ? 36 : 14);
+
+  // Column positions
+  const COL_STUDY_X  = 8;
+  const COL_WT_X     = 206;
+  const PLOT_LEFT    = 270;
+  const PLOT_RIGHT   = 730;
+  const PLOT_W       = PLOT_RIGHT - PLOT_LEFT;
+  const COL_ES_X     = 748;
+
+  // ── X-axis domain ──
+  const allCIs = studies.flatMap(s => [s.ci_lower, s.ci_upper]);
+  if (pooled) allCIs.push(pooled.ci_lower, pooled.ci_upper);
+  let rawMin = Math.min(...allCIs, 0);
+  let rawMax = Math.max(...allCIs, 0);
+
+  // Compute "nice" tick intervals
+  const rawRange = rawMax - rawMin || 1;
+  const rough = rawRange / 5;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const residual = rough / mag;
+  const niceFrac = residual <= 1.5 ? 1 : residual <= 3 ? 2 : residual <= 7 ? 5 : 10;
+  const tickStep = niceFrac * mag;
+  const axisMin = Math.floor(rawMin / tickStep) * tickStep;
+  const axisMax = Math.ceil(rawMax / tickStep) * tickStep;
+
+  const ticks: number[] = [];
+  for (let v = axisMin; v <= axisMax + tickStep * 0.01; v += tickStep) {
+    ticks.push(Math.round(v * 1e8) / 1e8);
+  }
+  // Ensure 0 is in ticks
+  if (!ticks.some(t => Math.abs(t) < tickStep * 0.01)) ticks.push(0);
+  ticks.sort((a, b) => a - b);
+
+  const toX = (v: number) => PLOT_LEFT + PLOT_W * ((v - axisMin) / (axisMax - axisMin));
+  const nullX = toX(0);
+  const maxWeight = Math.max(...studies.map(s => s.weight), 1);
+
+  // Format number compactly
+  const fmt = (n: number, d = 2) => n.toFixed(d);
+  const fmtP = (p: number) => p < 0.00001 ? '< 0.00001' : p < 0.0001 ? '< 0.0001' : p < 0.001 ? p.toFixed(5) : p.toFixed(4);
+
+  // ── Colours ──
+  const STUDY_COLOR   = '#1a1a2e';  // near-black for study squares
+  const CI_COLOR      = '#1a1a2e';
+  const DIAMOND_FILL  = '#d62828';
+  const DIAMOND_STROKE = '#9b2226';
+  const NULL_LINE_COL = '#495057';
+  const GRID_COL      = '#dee2e6';
+  const HEADER_BG     = '#f1f3f5';
+  const ZEBRA_COL     = '#f8f9fa';
+  const RULE_COL      = '#adb5bd';
+  const TEXT_PRIMARY   = '#212529';
+  const TEXT_SECONDARY = '#495057';
+  const TEXT_MUTED     = '#868e96';
+  const FONT = options.fontFamily || "'Helvetica Neue', Arial, sans-serif";
+
+  return (
+    <div style={{ width: '100%', height: '100%', fontFamily: FONT, overflow: 'auto', background: '#fff' }}>
+      {options.title && (
+        <div style={{ textAlign: 'center', fontSize: options.titleFontSize || 16, fontWeight: 700, color: TEXT_PRIMARY, padding: '10px 0 2px', letterSpacing: '-0.01em' }}>
+          {options.title}
+        </div>
+      )}
+      {options.subtitle && (
+        <div style={{ textAlign: 'center', fontSize: 12, color: TEXT_MUTED, paddingBottom: 6 }}>{options.subtitle}</div>
+      )}
+      <svg
+        width="100%"
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ display: 'block', maxWidth: '100%' }}
+        xmlns="http://www.w3.org/2000/svg"
+        fontFamily={FONT}
+      >
+        {/* ═══════════════ HEADER ROW ═══════════════ */}
+        <rect x={0} y={HEADER_Y - 14} width={W} height={20} fill={HEADER_BG} />
+        <line x1={0} y1={HEADER_Y - 14}  x2={W} y2={HEADER_Y - 14}  stroke={RULE_COL} strokeWidth="0.7" />
+        <line x1={0} y1={HEADER_Y + 6}   x2={W} y2={HEADER_Y + 6}   stroke={RULE_COL} strokeWidth="0.7" />
+        <text x={COL_STUDY_X}  y={HEADER_Y} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>Study</text>
+        <text x={COL_WT_X}     y={HEADER_Y} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>Weight</text>
+        <text x={PLOT_LEFT + PLOT_W / 2} y={HEADER_Y} textAnchor="middle" fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>{options.xAxisLabel || 'Effect Size'} (95% CI)</text>
+        <text x={COL_ES_X}     y={HEADER_Y} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>ES [95% CI]</text>
+
+        {/* ═══════════════ NULL-EFFECT LINE ═══════════════ */}
+        <line x1={nullX} y1={BODY_TOP} x2={nullX} y2={BODY_BOTTOM} stroke={NULL_LINE_COL} strokeWidth="0.8" strokeDasharray="4 2.5" />
+
+        {/* ═══════════════ STUDY ROWS ═══════════════ */}
+        {studies.map((s, i) => {
+          const y = BODY_TOP + (i + 0.5) * ROW_H;
+          const effectX  = toX(s.effect);
+          const rawLeft  = toX(s.ci_lower);
+          const rawRight = toX(s.ci_upper);
+          const ciLX = Math.max(PLOT_LEFT, rawLeft);
+          const ciRX = Math.min(PLOT_RIGHT, rawRight);
+          const clippedLeft  = rawLeft  < PLOT_LEFT;
+          const clippedRight = rawRight > PLOT_RIGHT;
+
+          // Weight-proportional square: min 5px, max 14px side
+          const sqSize = 5 + (s.weight / maxWeight) * 9;
+
+          return (
+            <g key={`study-${i}`}>
+              {/* Zebra stripe */}
+              {i % 2 === 0 && <rect x={0} y={y - ROW_H / 2} width={W} height={ROW_H} fill={ZEBRA_COL} />}
+
+              {/* Study name */}
+              <text x={COL_STUDY_X} y={y + 4} fontSize="10" fill={TEXT_PRIMARY}>{s.name}</text>
+
+              {/* Weight % */}
+              <text x={COL_WT_X} y={y + 4} fontSize="10" fill={TEXT_SECONDARY}>{fmt(s.weight, 1)}%</text>
+
+              {/* ── CI whisker ── */}
+              <line x1={ciLX} y1={y} x2={ciRX} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
+
+              {/* CI end caps (or arrow if clipped) */}
+              {!clippedLeft && <line x1={ciLX} y1={y - 3.5} x2={ciLX}  y2={y + 3.5} stroke={CI_COLOR} strokeWidth="1.2" />}
+              {clippedLeft  && <>
+                <line x1={PLOT_LEFT + 5} y1={y - 3} x2={PLOT_LEFT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
+                <line x1={PLOT_LEFT + 5} y1={y + 3} x2={PLOT_LEFT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
+              </>}
+              {!clippedRight && <line x1={ciRX} y1={y - 3.5} x2={ciRX} y2={y + 3.5} stroke={CI_COLOR} strokeWidth="1.2" />}
+              {clippedRight  && <>
+                <line x1={PLOT_RIGHT - 5} y1={y - 3} x2={PLOT_RIGHT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
+                <line x1={PLOT_RIGHT - 5} y1={y + 3} x2={PLOT_RIGHT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
+              </>}
+
+              {/* Effect size square */}
+              <rect
+                x={effectX - sqSize / 2} y={y - sqSize / 2}
+                width={sqSize} height={sqSize}
+                fill={STUDY_COLOR} opacity="0.85"
+              />
+
+              {/* ES [lower, upper] text */}
+              <text x={COL_ES_X} y={y + 4} fontSize="9.5" fill={TEXT_SECONDARY}>
+                {fmt(s.effect)} [{fmt(s.ci_lower)}, {fmt(s.ci_upper)}]
+              </text>
+            </g>
+          );
+        })}
+
+        {/* ═══════════════ SEPARATOR + POOLED DIAMOND ═══════════════ */}
+        {pooled && (() => {
+          const sepY = BODY_TOP + nStudies * ROW_H;
+          const dy   = BODY_TOP + (nStudies + 0.5) * ROW_H;
+          const dLeft   = Math.max(PLOT_LEFT,  toX(pooled.ci_lower));
+          const dRight  = Math.min(PLOT_RIGHT, toX(pooled.ci_upper));
+          const dCenter = toX(pooled.effect);
+          const dHalf   = 7;
+
+          return (
+            <g>
+              <line x1={0} y1={sepY + 2} x2={W} y2={sepY + 2} stroke={RULE_COL} strokeWidth="0.7" />
+
+              {/* Pooled label */}
+              <text x={COL_STUDY_X} y={dy + 4} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>{modelLabel}</text>
+
+              {/* Diamond */}
+              <polygon
+                points={`${dLeft},${dy} ${dCenter},${dy - dHalf} ${dRight},${dy} ${dCenter},${dy + dHalf}`}
+                fill={DIAMOND_FILL} stroke={DIAMOND_STROKE} strokeWidth="0.8" strokeLinejoin="miter"
+              />
+
+              {/* Pooled ES text */}
+              <text x={COL_ES_X} y={dy + 4} fontSize="9.5" fontWeight="700" fill={DIAMOND_FILL}>
+                {fmt(pooled.effect)} [{fmt(pooled.ci_lower)}, {fmt(pooled.ci_upper)}]
+              </text>
+
+              {/* Bottom rule */}
+              <line x1={0} y1={dy + ROW_H / 2 + 2} x2={W} y2={dy + ROW_H / 2 + 2} stroke={RULE_COL} strokeWidth="0.7" />
+            </g>
+          );
+        })()}
+
+        {/* ═══════════════ X AXIS ═══════════════ */}
+        <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_RIGHT} y2={AXIS_Y} stroke={TEXT_SECONDARY} strokeWidth="0.8" />
+        {ticks.map((t, i) => {
+          const tx = toX(t);
+          const isZero = Math.abs(t) < tickStep * 0.001;
+          return (
+            <g key={`tick-${i}`}>
+              <line x1={tx} y1={AXIS_Y} x2={tx} y2={AXIS_Y + 5} stroke={TEXT_SECONDARY} strokeWidth="0.7" />
+              {/* Light gridline up through data area */}
+              {!isZero && <line x1={tx} y1={BODY_TOP} x2={tx} y2={BODY_BOTTOM} stroke={GRID_COL} strokeWidth="0.4" />}
+              <text x={tx} y={AXIS_Y + 16} textAnchor="middle" fontSize="9" fill={TEXT_MUTED}>
+                {Math.abs(t) < 0.001 ? '0' : Number.isInteger(t) ? t.toString() : fmt(t, Math.abs(t) < 1 ? 2 : 1)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Favours labels */}
+        <text x={PLOT_LEFT + (nullX - PLOT_LEFT) / 2} y={AXIS_Y + 32} textAnchor="middle" fontSize="9" fill={TEXT_MUTED} fontStyle="italic">
+          ← Favours control
+        </text>
+        <text x={nullX + (PLOT_RIGHT - nullX) / 2} y={AXIS_Y + 32} textAnchor="middle" fontSize="9" fill={TEXT_MUTED} fontStyle="italic">
+          Favours treatment →
+        </text>
+
+        {/* ═══════════════ FOOTER: HETEROGENEITY + OVERALL TEST ═══════════════ */}
+        {hetStats && (
+          <text x={COL_STUDY_X} y={FOOTER_Y} fontSize="9" fill={TEXT_MUTED}>
+            Heterogeneity: τ² = {fmt(hetStats.tau2, 4)}; χ² = {fmt(hetStats.Q, 2)}, df = {hetStats.df} (P = {fmtP(hetStats.pValue)}); I² = {fmt(hetStats.I2, 1)}%
+          </text>
+        )}
+        {pooled && (
+          <text x={COL_STUDY_X} y={FOOTER_Y + (hetStats ? 14 : 0)} fontSize="9" fill={TEXT_MUTED}>
+            Test for overall effect: Z = {fmt(pooledZ, 2)} (P {pooledP < 0.00001 ? '< 0.00001' : `= ${fmtP(pooledP)}`})
+          </text>
+        )}
       </svg>
     </div>
   );

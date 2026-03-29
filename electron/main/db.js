@@ -107,6 +107,42 @@ function initDatabase(projectPath) {
         FOREIGN KEY (dataset_id) REFERENCES graphing_datasets(id) ON DELETE SET NULL,
         FOREIGN KEY (analysis_id) REFERENCES graphing_analyses(id) ON DELETE SET NULL
       );
+
+      CREATE TABLE IF NOT EXISTS extraction_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        fields_json TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS extracted_data_points (
+        id TEXT PRIMARY KEY,
+        ref_id TEXT NOT NULL,
+        reviewer_id TEXT,
+        template_id TEXT NOT NULL,
+        data_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS rob_assessments (
+        id TEXT PRIMARY KEY,
+        ref_id TEXT NOT NULL,
+        reviewer_id TEXT,
+        tool_used TEXT NOT NULL,
+        domain_scores_json TEXT,
+        overall_risk TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS reviewer_decisions (
+        ref_id TEXT NOT NULL,
+        reviewer_id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        notes TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (ref_id, reviewer_id, stage)
+      );
     `);
 
     // Migration: Ensure new columns exist for older projects
@@ -142,6 +178,18 @@ function getDb() {
     throw new Error('No project database is currently open.');
   }
   return db;
+}
+
+function getMetadata(key) {
+  const dbInst = getDb();
+  const row = dbInst.prepare(`SELECT value FROM metadata WHERE key = ?`).get(key);
+  return row ? row.value : null;
+}
+
+function setMetadata(key, value) {
+  const dbInst = getDb();
+  dbInst.prepare(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`).run(key, value);
+  return { success: true };
 }
 
 function closeDatabase() {
@@ -470,11 +518,91 @@ function deleteGraphingFigure(id) {
   return { success: true };
 }
 
+// === SYSTEMATIC REVIEW ===
+
+function getExtractionTemplates() {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM extraction_templates ORDER BY name ASC`).all();
+}
+
+function createExtractionTemplate(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT OR REPLACE INTO extraction_templates (id, name, fields_json)
+    VALUES (?, ?, ?)
+  `).run(id, data.name || 'Untitled Template', data.fields_json || '[]');
+  return dbInst.prepare(`SELECT * FROM extraction_templates WHERE id = ?`).get(id);
+}
+
+function deleteExtractionTemplate(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM extraction_templates WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+function getExtractedDataPoints(refId) {
+  const dbInst = getDb();
+  if (refId) {
+    return dbInst.prepare(`SELECT * FROM extracted_data_points WHERE ref_id = ?`).all(refId);
+  }
+  return dbInst.prepare(`SELECT * FROM extracted_data_points`).all();
+}
+
+function saveExtractedDataPoint(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT OR REPLACE INTO extracted_data_points (id, ref_id, reviewer_id, template_id, data_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).run(id, data.ref_id, data.reviewer_id || null, data.template_id, data.data_json || '{}');
+  return dbInst.prepare(`SELECT * FROM extracted_data_points WHERE id = ?`).get(id);
+}
+
+function getRobAssessments(refId) {
+  const dbInst = getDb();
+  if (refId) {
+    return dbInst.prepare(`SELECT * FROM rob_assessments WHERE ref_id = ?`).all(refId);
+  }
+  return dbInst.prepare(`SELECT * FROM rob_assessments`).all();
+}
+
+function saveRobAssessment(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT OR REPLACE INTO rob_assessments (id, ref_id, reviewer_id, tool_used, domain_scores_json, overall_risk)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, data.ref_id, data.reviewer_id || null, data.tool_used, data.domain_scores_json || '{}', data.overall_risk || 'Unclear');
+  return dbInst.prepare(`SELECT * FROM rob_assessments WHERE id = ?`).get(id);
+}
+
+function getReviewerDecisions(refId) {
+  const dbInst = getDb();
+  if (refId) {
+    return dbInst.prepare(`SELECT * FROM reviewer_decisions WHERE ref_id = ?`).all(refId);
+  }
+  return dbInst.prepare(`SELECT * FROM reviewer_decisions`).all();
+}
+
+function saveReviewerDecision(data) {
+  const dbInst = getDb();
+  dbInst.prepare(`
+    INSERT OR REPLACE INTO reviewer_decisions (ref_id, reviewer_id, stage, decision, notes, timestamp)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).run(data.ref_id, data.reviewer_id, data.stage, data.decision, data.notes || null);
+  return dbInst.prepare(`SELECT * FROM reviewer_decisions WHERE ref_id = ? AND reviewer_id = ? AND stage = ?`).get(data.ref_id, data.reviewer_id, data.stage);
+}
+
+
 module.exports = {
   initDatabase,
   getDb,
   closeDatabase,
   getProjectPath: () => currentProjectPath,
+  
+  getMetadata,
+  setMetadata,
   
   getReferences,
   addReference,
@@ -513,5 +641,17 @@ module.exports = {
   getGraphingFigure,
   createGraphingFigure,
   updateGraphingFigure,
-  deleteGraphingFigure
+  deleteGraphingFigure,
+
+  getExtractionTemplates,
+  createExtractionTemplate,
+  deleteExtractionTemplate,
+  getExtractedDataPoints,
+  saveExtractedDataPoint,
+
+  getRobAssessments,
+  saveRobAssessment,
+
+  getReviewerDecisions,
+  saveReviewerDecision
 };

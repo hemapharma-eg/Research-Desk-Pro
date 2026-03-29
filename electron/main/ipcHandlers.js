@@ -662,3 +662,272 @@ ipcMain.handle('graphing:importCSVFile', async () => {
     return { success: false, error: error.message };
   }
 });
+
+// --- Systematic Review Handlers ---
+
+ipcMain.handle('systematic:getExtractionTemplates', async () => {
+  try { return { success: true, data: dbManager.getExtractionTemplates() }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('systematic:createExtractionTemplate', async (event, data) => {
+  try { return { success: true, data: dbManager.createExtractionTemplate(data) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('systematic:deleteExtractionTemplate', async (event, id) => {
+  try { return dbManager.deleteExtractionTemplate(id); }
+  catch (error) { return { success: false, error: error.message }; }
+});
+
+ipcMain.handle('systematic:getExtractedDataPoints', async (event, refId) => {
+  try { return { success: true, data: dbManager.getExtractedDataPoints(refId) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('systematic:saveExtractedDataPoint', async (event, data) => {
+  try { return { success: true, data: dbManager.saveExtractedDataPoint(data) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+
+ipcMain.handle('systematic:getRobAssessments', async (event, refId) => {
+  try { return { success: true, data: dbManager.getRobAssessments(refId) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('systematic:saveRobAssessment', async (event, data) => {
+  try { return { success: true, data: dbManager.saveRobAssessment(data) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+
+ipcMain.handle('systematic:getReviewerDecisions', async (event, refId) => {
+  try { return { success: true, data: dbManager.getReviewerDecisions(refId) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('systematic:saveReviewerDecision', async (event, data) => {
+  try { return { success: true, data: dbManager.saveReviewerDecision(data) }; }
+  catch (error) { return { success: false, error: error.message }; }
+});
+
+ipcMain.handle('systematic:autoFetchPDFs', async (event, refs, email) => {
+  try {
+    const path = require('node:path');
+    const fs = require('node:fs');
+    
+    const pdfsDir = path.join(dbManager.getProjectPath(), 'pdfs');
+    if (!fs.existsSync(pdfsDir)) {
+      fs.mkdirSync(pdfsDir, { recursive: true });
+    }
+
+    let successCount = 0;
+    let failedCount = 0;
+    const successfulFetches = [];
+    
+    for (const ref of refs) {
+      if (!ref.doi) {
+        failedCount++;
+        continue;
+      }
+      
+      const doi = encodeURIComponent(ref.doi);
+      const url = `https://api.unpaywall.org/v2/${doi}?email=${encodeURIComponent(email)}`;
+      
+      try {
+        // Node 18+ native fetch
+        const response = await fetch(url);
+        if (!response.ok) {
+          failedCount++;
+          continue;
+        }
+        
+        const data = await response.json();
+        if (data.is_oa && data.best_oa_location && data.best_oa_location.url_for_pdf) {
+          const pdfUrl = data.best_oa_location.url_for_pdf;
+          const pdfRes = await fetch(pdfUrl);
+          if (!pdfRes.ok) {
+            failedCount++;
+            continue;
+          }
+          
+          const buffer = await pdfRes.arrayBuffer();
+          const filePath = path.join(pdfsDir, `${ref.id}.pdf`);
+          fs.writeFileSync(filePath, Buffer.from(buffer));
+          
+          try { dbManager.updateReference(ref.id, { pdf_path: filePath }); } catch(e) {}
+          successfulFetches.push({ id: ref.id, pdfPath: filePath });
+          successCount++;
+        } else {
+          failedCount++;
+        }
+      } catch (err) {
+        console.error('Fetch error for DOI:', ref.doi, err);
+        failedCount++;
+      }
+    }
+    
+    return { success: true, results: { successCount, failedCount, successfulFetches } };
+  } catch (error) {
+    console.error('AutoFetch Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+// --- Collaboration Handlers ---
+ipcMain.handle('systematic:exportCollaborationData', async (event, reviewerId) => {
+  try {
+    const decisions = dbManager.getDb().prepare(`SELECT * FROM reviewer_decisions WHERE reviewer_id = ?`).all(reviewerId);
+    const extractions = dbManager.getDb().prepare(`SELECT * FROM extracted_data_points WHERE reviewer_id = ?`).all(reviewerId);
+    const robs = dbManager.getDb().prepare(`SELECT * FROM rob_assessments WHERE reviewer_id = ?`).all(reviewerId);
+
+    const exportData = {
+      version: '1.0',
+      reviewerId,
+      timestamp: new Date().toISOString(),
+      decisions,
+      extractions,
+      robs
+    };
+
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export Reviewer Data',
+      defaultPath: `ReviewerData_${reviewerId}_${Date.now()}.json`,
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    const fs = require('node:fs');
+    fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2), 'utf-8');
+    
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Export Collab Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('systematic:importCollaborationData', async (event) => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import Reviewer Data',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+
+    if (canceled || filePaths.length === 0) return { success: false, canceled: true };
+
+    const fs = require('node:fs');
+    const importData = JSON.parse(fs.readFileSync(filePaths[0], 'utf-8'));
+    
+    if (!importData.version || !importData.reviewerId) {
+      throw new Error('Invalid reviewer data file format.');
+    }
+
+    const { decisions, extractions, robs } = importData;
+    
+    const dbInst = dbManager.getDb();
+    const tx = dbInst.transaction(() => {
+      // Import decisions
+      const insertDec = dbInst.prepare(`INSERT OR REPLACE INTO reviewer_decisions (ref_id, reviewer_id, stage, decision, notes, timestamp) VALUES (?, ?, ?, ?, ?, ?)`);
+      for (const d of (decisions || [])) {
+        insertDec.run(d.ref_id, d.reviewer_id, d.stage, d.decision, d.notes, d.timestamp);
+      }
+
+      // Import extractions
+      const insertExt = dbInst.prepare(`INSERT OR REPLACE INTO extracted_data_points (id, ref_id, reviewer_id, template_id, data_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)`);
+      for (const e of (extractions || [])) {
+        insertExt.run(e.id, e.ref_id, e.reviewer_id, e.template_id, e.data_json, e.updated_at);
+      }
+
+      // Import RoBs
+      const insertRob = dbInst.prepare(`INSERT OR REPLACE INTO rob_assessments (id, ref_id, reviewer_id, tool_used, domain_scores_json, overall_risk, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      for (const r of (robs || [])) {
+        insertRob.run(r.id, r.ref_id, r.reviewer_id, r.tool_used, r.domain_scores_json, r.overall_risk, r.created_at);
+      }
+    });
+    
+    tx();
+    
+    return { 
+      success: true, 
+      stats: {
+        decisions: (decisions || []).length,
+        extractions: (extractions || []).length,
+        robs: (robs || []).length
+      }
+    };
+  } catch (error) {
+    console.error('Import Collab Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+// --- Graphing Integration ---
+ipcMain.handle('systematic:exportToGraphingStudio', async (event, includedRefs) => {
+  try {
+     const dbInst = dbManager.getDb();
+     if (!includedRefs || includedRefs.length === 0) return { success: false, error: 'No strictly included references provided.' };
+
+     const templates = dbInst.prepare(`SELECT * FROM extraction_templates`).all();
+     
+     const columns = [
+       { id: 'study_name', title: 'Study Name', subcolumns: 1, isX: true },
+       { id: 'year', title: 'Year', subcolumns: 1, isX: false }
+     ];
+     
+     templates.forEach(t => {
+       const fields = JSON.parse(t.fields_json || '[]');
+       fields.forEach(f => {
+         const colId = `ext_${t.id}_${f.id}`;
+         columns.push({ id: colId, title: `${t.name} - ${f.name}`, subcolumns: 1, isX: false });
+       });
+     });
+
+     const rows = [];
+     for (const ref of includedRefs) {
+       const rowId = `row_${ref.id}`;
+       const cells = {};
+       
+       columns.forEach(c => {
+         cells[c.id] = [{ id: `cell_${rowId}_${c.id}`, value: null }];
+       });
+
+       cells['study_name'][0].value = ref.authors ? `${ref.authors.split(',')[0]} et al.` : ref.title;
+       cells['year'][0].value = ref.year || null;
+
+       const exts = dbInst.prepare(`SELECT * FROM extracted_data_points WHERE ref_id = ? ORDER BY updated_at DESC`).all(ref.id);
+       
+       exts.forEach(e => {
+          const dataJson = JSON.parse(e.data_json || '{}');
+          Object.keys(dataJson).forEach(fKey => {
+             const colId = `ext_${e.template_id}_${fKey}`;
+             if (cells[colId]) {
+               cells[colId][0].value = dataJson[fKey];
+             }
+          });
+       });
+
+       rows.push({
+         id: rowId,
+         rowName: ref.authors ? `${ref.authors.split(',')[0]} et al.` : `Ref ${ref.id.substring(0,6)}`,
+         cells
+       });
+     }
+
+     const metadataStr = JSON.stringify({
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        notes: 'Imported from Systematic Review Protocol'
+     });
+
+     const dsResult = dbManager.createGraphingDataset({
+        name: `Meta-Analysis Dataset (${new Date().toLocaleDateString()})`,
+        format: 'column',
+        columns_json: JSON.stringify(columns),
+        rows_json: JSON.stringify(rows),
+        metadata_json: metadataStr,
+        variable_mapping_json: '{}'
+     });
+
+     return { success: true, datasetId: typeof dsResult === 'object' ? dsResult.id : dsResult };
+  } catch (err) {
+    console.error('Export Graphing Error:', err);
+    return { success: false, error: String(err) };
+  }
+});

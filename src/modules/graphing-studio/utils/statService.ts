@@ -1185,3 +1185,143 @@ export function runROCAnalysis(
   };
 }
 
+// ===================== Meta-Analysis (Forest Plot) =====================
+
+export interface MetaAnalysisStudy {
+  name: string;
+  effectSize: number;  // e.g., SMD, logOR, mean difference
+  se: number;          // standard error of the effect size
+  ci_lower: number;
+  ci_upper: number;
+  weight: number;      // will be computed
+  n?: number;
+}
+
+export interface MetaAnalysisResult extends StatTestResult {
+  studies: MetaAnalysisStudy[];
+  pooledEffect: number;
+  pooledSE: number;
+  pooledCI_lower: number;
+  pooledCI_upper: number;
+  heterogeneity: {
+    Q: number;
+    df: number;
+    pValue: number;
+    I2: number;        // percentage
+    tau2: number;      // between-study variance (DerSimonian-Laird)
+  };
+  model: 'fixed' | 'random';
+}
+
+/**
+ * Run an inverse-variance weighted meta-analysis.
+ * Input: arrays of effect sizes and their standard errors, plus study labels.
+ * The function computes both fixed-effect and random-effects (DL) models.
+ */
+export function runMetaAnalysis(
+  studyNames: string[],
+  effectSizes: number[],
+  standardErrors: number[],
+  model: 'fixed' | 'random' = 'random'
+): MetaAnalysisResult {
+  const k = studyNames.length;
+  if (k < 2) throw new Error('Meta-analysis requires at least 2 studies.');
+  if (effectSizes.length !== k || standardErrors.length !== k) {
+    throw new Error('Effect sizes and standard errors must have the same length as study names.');
+  }
+
+  // Fixed-effect weights: w_i = 1/SE_i²
+  const wi = standardErrors.map(se => se > 0 ? 1 / (se * se) : 0);
+  const sumW = wi.reduce((a, b) => a + b, 0);
+
+  // Fixed-effect pooled estimate
+  const thetaFE = sumW > 0
+    ? wi.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumW
+    : 0;
+
+  // Cochran's Q for heterogeneity
+  const Q = wi.reduce((acc, w, i) => acc + w * (effectSizes[i] - thetaFE) ** 2, 0);
+  const df = k - 1;
+  const qPValue = df > 0 ? 1 - jStat.chisquare.cdf(Q, df) : 1;
+
+  // I² statistic
+  const I2 = df > 0 ? Math.max(0, ((Q - df) / Q) * 100) : 0;
+
+  // DerSimonian-Laird τ² estimator
+  const sumW2 = wi.reduce((a, w) => a + w * w, 0);
+  const C = sumW - sumW2 / sumW;
+  let tau2 = C > 0 ? Math.max(0, (Q - df) / C) : 0;
+
+  let pooledEffect: number;
+  let pooledSE: number;
+  let weights: number[];
+
+  if (model === 'random' && tau2 > 0) {
+    // Random-effects weights: w*_i = 1/(SE_i² + τ²)
+    const wiStar = standardErrors.map(se => se > 0 ? 1 / (se * se + tau2) : 0);
+    const sumWStar = wiStar.reduce((a, b) => a + b, 0);
+    pooledEffect = sumWStar > 0
+      ? wiStar.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumWStar
+      : 0;
+    pooledSE = sumWStar > 0 ? Math.sqrt(1 / sumWStar) : 0;
+    weights = wiStar;
+  } else {
+    pooledEffect = thetaFE;
+    pooledSE = sumW > 0 ? Math.sqrt(1 / sumW) : 0;
+    weights = wi;
+    tau2 = 0;
+  }
+
+  // Normalize weights to percentages for display
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+  // Pooled CI
+  const z = pooledSE > 0 ? pooledEffect / pooledSE : 0;
+  const pValue = pooledSE > 0 ? (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) * 2 : 1;
+  const pooledCI_lower = pooledEffect - 1.96 * pooledSE;
+  const pooledCI_upper = pooledEffect + 1.96 * pooledSE;
+
+  // Build per-study data
+  const studies: MetaAnalysisStudy[] = studyNames.map((name, i) => ({
+    name,
+    effectSize: effectSizes[i],
+    se: standardErrors[i],
+    ci_lower: effectSizes[i] - 1.96 * standardErrors[i],
+    ci_upper: effectSizes[i] + 1.96 * standardErrors[i],
+    weight: totalWeight > 0 ? (weights[i] / totalWeight) * 100 : 0,
+  }));
+
+  return {
+    testName: `Meta-Analysis (${model === 'random' ? 'Random-Effects, DL' : 'Fixed-Effect, IV'})`,
+    mainPValue: pValue,
+    statisticType: 'Z',
+    statisticValue: z,
+    isSignificant: pValue <= 0.05,
+    descriptives: studies.map(s => ({
+      group: s.name,
+      n: 0, mean: s.effectSize, median: s.effectSize,
+      sd: s.se, variance: s.se * s.se, sem: s.se,
+      min: s.ci_lower, max: s.ci_upper, range: s.ci_upper - s.ci_lower,
+      iqr: 0, q1: s.ci_lower, q3: s.ci_upper,
+      ci95_lower: s.ci_lower, ci95_upper: s.ci_upper,
+      cv: 0, sum: 0,
+    })),
+    effectSize: pooledEffect,
+    effectSizeType: 'Pooled Effect',
+    studies,
+    pooledEffect,
+    pooledSE,
+    pooledCI_lower,
+    pooledCI_upper,
+    heterogeneity: { Q, df, pValue: qPValue, I2, tau2 },
+    model,
+    notes: [
+      `Model: ${model === 'random' ? 'Random-Effects (DerSimonian-Laird)' : 'Fixed-Effect (Inverse Variance)'}`,
+      `Pooled effect = ${pooledEffect.toFixed(4)} (95% CI: ${pooledCI_lower.toFixed(4)} to ${pooledCI_upper.toFixed(4)})`,
+      `Z = ${z.toFixed(3)}, p = ${pValue < 0.0001 ? '< 0.0001' : pValue.toFixed(4)}`,
+      `Heterogeneity: Q(${df}) = ${Q.toFixed(2)}, p = ${qPValue < 0.0001 ? '< 0.0001' : qPValue.toFixed(4)}`,
+      `I² = ${I2.toFixed(1)}%, τ² = ${tau2.toFixed(4)}`,
+      `Number of studies: ${k}`,
+    ],
+  };
+}

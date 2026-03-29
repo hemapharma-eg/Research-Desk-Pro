@@ -1,8 +1,13 @@
-// removed unused imports
+import { useState } from 'react';
 import { useSystematicReview } from '../../context/SystematicReviewContext';
+import { UnpaywallSetupModal } from './UnpaywallSetupModal';
 
 export function FullTextManager() {
   const { state, dispatch, logEvent } = useSystematicReview();
+  
+  const [showModal, setShowModal] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchStats, setFetchStats] = useState<{success: number, failed: number} | null>(null);
 
   // Records that reached full text stage
   const ftQueue = state.records.filter(r => ['full-text-retrieval', 'full-text-screening'].includes(r.stage));
@@ -71,12 +76,71 @@ export function FullTextManager() {
     logEvent('screening_decision', 'full-text-retrieval', recordId, 'Excluded due to missing full-text');
   };
 
+  const handleBulkFetch = (email: string) => {
+    setShowModal(false);
+    setIsFetching(true);
+    setFetchStats(null);
+    
+    // Only queue records that don't already have a PDF attached
+    const queue = ftQueue.filter(r => !r.pdfAttached);
+    
+    window.api.autoFetchPDFs(queue, email).then((res) => {
+      setIsFetching(false);
+      if (res.success && res.results) {
+        setFetchStats({ success: res.results.successCount, failed: res.results.failedCount });
+        
+        if (res.results.successCount > 0) {
+           logEvent('pdf_attached', 'full-text-retrieval', undefined, `Auto-fetched ${res.results.successCount} PDFs via Unpaywall.`);
+           
+           res.results.successfulFetches?.forEach(f => {
+             dispatch({ 
+               type: 'UPDATE_RECORD', 
+               payload: { 
+                 id: f.id, 
+                 updates: { pdfAttached: true, pdfPath: f.pdfPath, stage: 'full-text-screening' } 
+               } 
+             });
+           });
+        }
+      } else {
+        alert('Bulk fetch failed: ' + res.error);
+      }
+    });
+  };
+
   return (
-    <div style={{ padding: 24, height: '100%', overflowY: 'auto' }}>
-      <h2 style={{ margin: '0 0 16px 0' }}>Full-Text Retrieval Manager</h2>
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24 }}>
-        Attach PDF files to records that passed Title & Abstract screening before they enter Full-Text screening.
-      </p>
+    <div style={{ padding: 24, height: '100%', overflowY: 'auto', position: 'relative' }}>
+      {showModal && <UnpaywallSetupModal onCancel={() => setShowModal(false)} onComplete={handleBulkFetch} />}
+      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: '0 0 8px 0' }}>Full-Text Retrieval Manager</h2>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
+            Attach PDF files to records that passed Title & Abstract screening.
+          </p>
+        </div>
+        
+        <div>
+          <button 
+            className="sr-btn sr-btn-success" 
+            onClick={() => setShowModal(true)}
+            disabled={isFetching || ftQueue.filter(r => !r.pdfAttached).length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontSize: 14 }}
+          >
+            {isFetching ? 'Fetching PDFs...' : `🚀 Auto-Fetch Missing PDFs (${ftQueue.filter(r => !r.pdfAttached).length})`}
+          </button>
+        </div>
+      </div>
+      
+      {fetchStats && (
+        <div style={{ marginBottom: 20, padding: 15, backgroundColor: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, display: 'flex', justifyContent: 'space-between' }}>
+          <div>
+            <strong>Auto-Fetch Complete:</strong> Successfully downloaded <strong>{fetchStats.success}</strong> PDFs. 
+            <span style={{color: '#888', marginLeft: 10}}>Failed/Not Open Access: {fetchStats.failed}</span>
+          </div>
+          <button className="sr-btn" onClick={() => window.location.reload()} style={{ padding: '4px 8px' }}>↻ Refresh List</button>
+        </div>
+      )}
 
       <div className="sr-card" style={{ padding: 0, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
