@@ -31,11 +31,13 @@ import { EndnoteNode } from './extensions/EndnoteNode';
 import { CitationNode } from './extensions/CitationNode';
 import { GraphNode } from './extensions/GraphNode';
 import { MathNode } from './extensions/MathNode';
+import { TableBuilderEmbedNode } from './extensions/TableBuilderEmbedNode';
 import { suggestion } from './extensions/suggestion';
 import { Bibliography } from './components/Bibliography';
 import { FootnoteList } from './components/FootnoteList';
 import { EndnoteList } from './components/EndnoteList';
 import { DocumentSidebar } from './components/DocumentSidebar';
+import { LinkedObjectsPanel } from './components/LinkedObjectsPanel';
 import { SearchAndReplace } from './extensions/SearchAndReplace';
 import { IndexGeneratorNode } from './extensions/IndexGeneratorNode';
 import { FindReplacePanel } from './components/FindReplacePanel';
@@ -49,9 +51,10 @@ interface TipTapEditorProps {
   documentTitle: string;
   content: string;
   onChange: (html: string) => void;
+  documentId?: string | null;
 }
 
-export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorProps) {
+export function TipTapEditor({ documentTitle, content, onChange, documentId }: TipTapEditorProps) {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showFootnotePrompt, setShowFootnotePrompt] = useState(false);
   const [showEndnotePrompt, setShowEndnotePrompt] = useState(false);
@@ -61,6 +64,7 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
   const [showOutline, setShowOutline] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showTrackChanges, setShowTrackChanges] = useState(false);
+  const [showLinkedObjects, setShowLinkedObjects] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [noteText, setNoteText] = useState('');
   
@@ -119,6 +123,7 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
         suggestion: crossRefSuggestion,
       }),
       SearchAndReplace,
+      TableBuilderEmbedNode,
       CitationNode.configure({
         HTMLAttributes: {
           class: 'citation-badge',
@@ -624,6 +629,13 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
           ∑ Math
         </button>
         <button
+          onClick={() => setShowLinkedObjects(true)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'transparent' }}
+          title="Insert Table Builder Table"
+        >
+          🗃 TB Table
+        </button>
+        <button
           onClick={() => editor.chain().focus().setPageBreak().run()}
           style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'transparent' }}
           title="Insert Page Break"
@@ -736,6 +748,13 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
           title="Toggle Document Outline"
         >
           📑 Outline
+        </button>
+        <button
+          onClick={() => setShowLinkedObjects(!showLinkedObjects)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: showLinkedObjects ? 'var(--color-bg-hover)' : 'transparent' }}
+          title="View linked Table Builder tables"
+        >
+          📋 Linked Objects
         </button>
         <button
           onClick={() => setShowFindReplace(true)}
@@ -894,6 +913,22 @@ export function TipTapEditor({ documentTitle, content, onChange }: TipTapEditorP
           />
         )}
         {showTrackChanges && (<TrackChangesSidebar editor={editor} onClose={() => setShowTrackChanges(false)} />)}
+        {showLinkedObjects && (
+          <div style={{
+            width: '280px',
+            borderLeft: '1px solid var(--color-border-light)',
+            backgroundColor: 'var(--color-bg-sidebar)',
+            overflowY: 'auto',
+            flexShrink: 0,
+          }}>
+            <LinkedObjectsPanel
+              documentId={documentId || null}
+              onInsertTable={(tableId, caption) => {
+                (editor as any).chain().focus().insertTableBuilderEmbed(tableId, caption).run();
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="print-hidden" style={{ 

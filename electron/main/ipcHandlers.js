@@ -931,3 +931,209 @@ ipcMain.handle('systematic:exportToGraphingStudio', async (event, includedRefs) 
     return { success: false, error: String(err) };
   }
 });
+
+// ═══════════════════════════════════════════════
+// Table Builder & Results Reporting — IPC Handlers
+// ═══════════════════════════════════════════════
+
+ipcMain.handle('tableBuilder:getTables', async () => {
+  try { return { success: true, data: dbManager.getTbTables() }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:getTable', async (_, id) => {
+  try { return { success: true, data: dbManager.getTbTable(id) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:createTable', async (_, data) => {
+  try { return { success: true, data: dbManager.createTbTable(data) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:updateTable', async (_, id, updates) => {
+  try { return { success: true, data: dbManager.updateTbTable(id, updates) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:deleteTable', async (_, id) => {
+  try { return { success: true, data: dbManager.deleteTbTable(id) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:getNarratives', async (_, tableId) => {
+  try { return { success: true, data: dbManager.getTbNarratives(tableId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:createNarrative', async (_, data) => {
+  try { return { success: true, data: dbManager.createTbNarrative(data) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:updateNarrative', async (_, id, updates) => {
+  try { return { success: true, data: dbManager.updateTbNarrative(id, updates) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:deleteNarrative', async (_, id) => {
+  try { return { success: true, data: dbManager.deleteTbNarrative(id) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:getDocLinks', async (_, tableId) => {
+  try { return { success: true, data: dbManager.getTbDocLinks(tableId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:createDocLink', async (_, data) => {
+  try { return { success: true, data: dbManager.createTbDocLink(data) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:updateDocLink', async (_, id, updates) => {
+  try { return { success: true, data: dbManager.updateTbDocLink(id, updates) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:deleteDocLink', async (_, id) => {
+  try { return { success: true, data: dbManager.deleteTbDocLink(id) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:getAuditLog', async (_, tableId) => {
+  try { return { success: true, data: dbManager.getTbAuditLog(tableId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:createAuditEntry', async (_, data) => {
+  try { return { success: true, data: dbManager.createTbAuditEntry(data) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:getExportHistory', async (_, tableId) => {
+  try { return { success: true, data: dbManager.getTbExportHistory(tableId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:createExportEntry', async (_, data) => {
+  try { return { success: true, data: dbManager.createTbExportEntry(data) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:getSettings', async () => {
+  try { return { success: true, data: dbManager.getMetadata('tb_settings') || '{}' }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:updateSettings', async (_, settings_json) => {
+  try { return { success: true, data: dbManager.setMetadata('tb_settings', settings_json) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('tableBuilder:exportTablePDF', async (event, html, defaultName) => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export Table to PDF',
+      defaultPath: `${defaultName || 'Table'}.pdf`,
+      filters: [{ name: 'PDF Document', extensions: ['pdf'] }]
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    const BrowserWindow = require('electron').BrowserWindow;
+    const printWindow = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: true } });
+    
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const pdf = await printWindow.webContents.printToPDF({
+      marginsType: 0,
+      pageSize: 'A4',
+      printBackground: true,
+      printSelectionOnly: false,
+      landscape: false
+    });
+    
+    fs.writeFileSync(filePath, pdf);
+    printWindow.close();
+    
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Export PDF Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('tableBuilder:exportTableCSV', async (event, csvContent, defaultName) => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export Table to CSV',
+      defaultPath: `${defaultName || 'Table'}.csv`,
+      filters: [{ name: 'CSV Document', extensions: ['csv'] }]
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    fs.writeFileSync(filePath, csvContent, 'utf-8');
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Export CSV Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('tableBuilder:exportTableImage', async (event, html, defaultName) => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export Table Image',
+      defaultPath: `${defaultName || 'Table'}.png`,
+      filters: [{ name: 'PNG Image', extensions: ['png'] }]
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    const BrowserWindow = require('electron').BrowserWindow;
+    const printWindow = new BrowserWindow({ show: false, width: 1200, height: 800, webPreferences: { nodeIntegration: true } });
+    
+    // Add some padding to the HTML body for the screenshot
+    const paddedHtml = `<div style="padding: 20px; background: white;">${html}</div>`;
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(paddedHtml)}`);
+    
+    // Wait for render
+    await new Promise(r => setTimeout(r, 500));
+    
+    const image = await printWindow.webContents.capturePage();
+    fs.writeFileSync(filePath, image.toPNG());
+    printWindow.close();
+    
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Export Image Error:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('tableBuilder:importCSV', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import CSV Data',
+      filters: [
+        { name: 'CSV/TSV Files', extensions: ['csv', 'tsv', 'txt'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const filePath = filePaths[0];
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const fileName = path.basename(filePath, path.extname(filePath));
+
+    return { success: true, data: { content, fileName, filePath } };
+  } catch (error) {
+    console.error('Import CSV Error:', error);
+    return { success: false, error: error.message };
+  }
+});

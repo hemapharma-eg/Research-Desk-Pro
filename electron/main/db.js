@@ -143,6 +143,84 @@ function initDatabase(projectPath) {
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (ref_id, reviewer_id, stage)
       );
+
+      -- ═══ Table Builder & Results Reporting ═══
+      CREATE TABLE IF NOT EXISTS tb_tables (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        title TEXT DEFAULT '',
+        caption TEXT DEFAULT '',
+        table_type TEXT NOT NULL DEFAULT 'custom',
+        table_number TEXT DEFAULT '',
+        numbering_mode TEXT DEFAULT 'auto',
+        category TEXT DEFAULT '',
+        style_preset TEXT DEFAULT 'general-journal',
+        columns_json TEXT NOT NULL DEFAULT '[]',
+        rows_json TEXT NOT NULL DEFAULT '[]',
+        grouped_headers_json TEXT DEFAULT '[]',
+        footnotes_json TEXT DEFAULT '[]',
+        source_analysis_id TEXT,
+        source_dataset_id TEXT,
+        source_mapping_json TEXT DEFAULT '{}',
+        link_status TEXT DEFAULT 'none',
+        last_refresh_at DATETIME,
+        style_options_json TEXT DEFAULT '{}',
+        section_target TEXT DEFAULT '',
+        keywords TEXT DEFAULT '',
+        notes_to_self TEXT DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_by TEXT DEFAULT '',
+        FOREIGN KEY (source_analysis_id) REFERENCES graphing_analyses(id) ON DELETE SET NULL,
+        FOREIGN KEY (source_dataset_id) REFERENCES graphing_datasets(id) ON DELETE SET NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS tb_narratives (
+        id TEXT PRIMARY KEY,
+        table_id TEXT NOT NULL,
+        narrative_type TEXT DEFAULT 'concise',
+        tone TEXT DEFAULT 'neutral',
+        content TEXT DEFAULT '',
+        settings_json TEXT DEFAULT '{}',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (table_id) REFERENCES tb_tables(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS tb_document_links (
+        id TEXT PRIMARY KEY,
+        table_id TEXT NOT NULL,
+        document_id TEXT NOT NULL,
+        insertion_type TEXT DEFAULT 'linked',
+        position_marker TEXT DEFAULT '',
+        caption_placement TEXT DEFAULT 'above',
+        include_footnotes INTEGER DEFAULT 1,
+        include_narrative INTEGER DEFAULT 0,
+        last_synced_at DATETIME,
+        update_status TEXT DEFAULT 'synced',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (table_id) REFERENCES tb_tables(id) ON DELETE CASCADE,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS tb_audit_log (
+        id TEXT PRIMARY KEY,
+        table_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details_json TEXT DEFAULT '{}',
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (table_id) REFERENCES tb_tables(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS tb_export_history (
+        id TEXT PRIMARY KEY,
+        table_id TEXT NOT NULL,
+        format TEXT NOT NULL,
+        file_path TEXT DEFAULT '',
+        options_json TEXT DEFAULT '{}',
+        exported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (table_id) REFERENCES tb_tables(id) ON DELETE CASCADE
+      );
     `);
 
     // Migration: Ensure new columns exist for older projects
@@ -595,7 +673,193 @@ function saveReviewerDecision(data) {
 }
 
 
+// === TABLE BUILDER ===
+
+function getTbTables() {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM tb_tables ORDER BY updated_at DESC`).all();
+}
+
+function getTbTable(id) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM tb_tables WHERE id = ?`).get(id);
+}
+
+function createTbTable(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT INTO tb_tables (id, name, title, caption, table_type, table_number, numbering_mode, category, style_preset,
+      columns_json, rows_json, grouped_headers_json, footnotes_json,
+      source_analysis_id, source_dataset_id, source_mapping_json, link_status,
+      style_options_json, section_target, keywords, notes_to_self, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, data.name || 'Untitled Table', data.title || '', data.caption || '',
+    data.table_type || 'custom', data.table_number || '', data.numbering_mode || 'auto',
+    data.category || '', data.style_preset || 'general-journal',
+    data.columns_json || '[]', data.rows_json || '[]',
+    data.grouped_headers_json || '[]', data.footnotes_json || '[]',
+    data.source_analysis_id || null, data.source_dataset_id || null,
+    data.source_mapping_json || '{}', data.link_status || 'none',
+    data.style_options_json || '{}', data.section_target || '',
+    data.keywords || '', data.notes_to_self || '', data.created_by || ''
+  );
+  return getTbTable(id);
+}
+
+function updateTbTable(id, updates) {
+  const dbInst = getDb();
+  const current = getTbTable(id);
+  if (!current) throw new Error('Table not found');
+
+  const fields = ['name','title','caption','table_type','table_number','numbering_mode','category','style_preset',
+    'columns_json','rows_json','grouped_headers_json','footnotes_json',
+    'source_analysis_id','source_dataset_id','source_mapping_json','link_status','last_refresh_at',
+    'style_options_json','section_target','keywords','notes_to_self','created_by'];
+
+  const values = fields.map(f => updates[f] !== undefined ? updates[f] : current[f]);
+
+  dbInst.prepare(`
+    UPDATE tb_tables SET
+      name=?, title=?, caption=?, table_type=?, table_number=?, numbering_mode=?, category=?, style_preset=?,
+      columns_json=?, rows_json=?, grouped_headers_json=?, footnotes_json=?,
+      source_analysis_id=?, source_dataset_id=?, source_mapping_json=?, link_status=?, last_refresh_at=?,
+      style_options_json=?, section_target=?, keywords=?, notes_to_self=?, created_by=?,
+      updated_at=CURRENT_TIMESTAMP
+    WHERE id=?
+  `).run(...values, id);
+  return getTbTable(id);
+}
+
+function deleteTbTable(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM tb_tables WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+function getTbNarratives(tableId) {
+  const dbInst = getDb();
+  if (tableId) return dbInst.prepare(`SELECT * FROM tb_narratives WHERE table_id = ?`).all(tableId);
+  return dbInst.prepare(`SELECT * FROM tb_narratives`).all();
+}
+
+function createTbNarrative(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT INTO tb_narratives (id, table_id, narrative_type, tone, content, settings_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, data.table_id, data.narrative_type || 'concise', data.tone || 'neutral', data.content || '', data.settings_json || '{}');
+  return dbInst.prepare(`SELECT * FROM tb_narratives WHERE id = ?`).get(id);
+}
+
+function updateTbNarrative(id, updates) {
+  const dbInst = getDb();
+  const current = dbInst.prepare(`SELECT * FROM tb_narratives WHERE id = ?`).get(id);
+  if (!current) throw new Error('Narrative not found');
+  dbInst.prepare(`
+    UPDATE tb_narratives SET narrative_type=?, tone=?, content=?, settings_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+  `).run(
+    updates.narrative_type || current.narrative_type,
+    updates.tone || current.tone,
+    updates.content !== undefined ? updates.content : current.content,
+    updates.settings_json || current.settings_json, id
+  );
+  return dbInst.prepare(`SELECT * FROM tb_narratives WHERE id = ?`).get(id);
+}
+
+function deleteTbNarrative(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM tb_narratives WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+function getTbDocLinks(tableId) {
+  const dbInst = getDb();
+  if (tableId) return dbInst.prepare(`SELECT * FROM tb_document_links WHERE table_id = ?`).all(tableId);
+  return dbInst.prepare(`SELECT * FROM tb_document_links`).all();
+}
+
+function createTbDocLink(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT INTO tb_document_links (id, table_id, document_id, insertion_type, position_marker, caption_placement, include_footnotes, include_narrative)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.table_id, data.document_id, data.insertion_type || 'linked',
+    data.position_marker || '', data.caption_placement || 'above',
+    data.include_footnotes !== undefined ? data.include_footnotes : 1,
+    data.include_narrative || 0);
+  return dbInst.prepare(`SELECT * FROM tb_document_links WHERE id = ?`).get(id);
+}
+
+function updateTbDocLink(id, updates) {
+  const dbInst = getDb();
+  const current = dbInst.prepare(`SELECT * FROM tb_document_links WHERE id = ?`).get(id);
+  if (!current) throw new Error('Doc link not found');
+  dbInst.prepare(`
+    UPDATE tb_document_links SET insertion_type=?, position_marker=?, caption_placement=?, include_footnotes=?, include_narrative=?, last_synced_at=?, update_status=? WHERE id=?
+  `).run(
+    updates.insertion_type || current.insertion_type,
+    updates.position_marker !== undefined ? updates.position_marker : current.position_marker,
+    updates.caption_placement || current.caption_placement,
+    updates.include_footnotes !== undefined ? updates.include_footnotes : current.include_footnotes,
+    updates.include_narrative !== undefined ? updates.include_narrative : current.include_narrative,
+    updates.last_synced_at || current.last_synced_at,
+    updates.update_status || current.update_status, id
+  );
+  return dbInst.prepare(`SELECT * FROM tb_document_links WHERE id = ?`).get(id);
+}
+
+function deleteTbDocLink(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM tb_document_links WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+function getTbAuditLog(tableId) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM tb_audit_log WHERE table_id = ? ORDER BY timestamp DESC`).all(tableId);
+}
+
+function createTbAuditEntry(data) {
+  const dbInst = getDb();
+  const id = crypto.randomUUID();
+  dbInst.prepare(`INSERT INTO tb_audit_log (id, table_id, action, details_json) VALUES (?, ?, ?, ?)`).run(
+    id, data.table_id, data.action, data.details_json || '{}'
+  );
+  return dbInst.prepare(`SELECT * FROM tb_audit_log WHERE id = ?`).get(id);
+}
+
+function getTbExportHistory(tableId) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM tb_export_history WHERE table_id = ? ORDER BY exported_at DESC`).all(tableId);
+}
+
+function createTbExportEntry(data) {
+  const dbInst = getDb();
+  const id = crypto.randomUUID();
+  dbInst.prepare(`INSERT INTO tb_export_history (id, table_id, format, file_path, options_json) VALUES (?, ?, ?, ?, ?)`).run(
+    id, data.table_id, data.format, data.file_path || '', data.options_json || '{}'
+  );
+  return dbInst.prepare(`SELECT * FROM tb_export_history WHERE id = ?`).get(id);
+}
+
+function getTbSettings() {
+  const dbInst = getDb();
+  const row = dbInst.prepare(`SELECT value FROM metadata WHERE key = 'tb_settings'`).get();
+  return row ? row.value : '{}';
+}
+
+function updateTbSettings(settingsJson) {
+  const dbInst = getDb();
+  dbInst.prepare(`INSERT OR REPLACE INTO metadata (key, value) VALUES ('tb_settings', ?)`).run(settingsJson);
+  return { success: true };
+}
+
 module.exports = {
+
   initDatabase,
   getDb,
   closeDatabase,
@@ -653,5 +917,26 @@ module.exports = {
   saveRobAssessment,
 
   getReviewerDecisions,
-  saveReviewerDecision
+  saveReviewerDecision,
+
+  // Table Builder
+  getTbTables,
+  getTbTable,
+  createTbTable,
+  updateTbTable,
+  deleteTbTable,
+  getTbNarratives,
+  createTbNarrative,
+  updateTbNarrative,
+  deleteTbNarrative,
+  getTbDocLinks,
+  createTbDocLink,
+  updateTbDocLink,
+  deleteTbDocLink,
+  getTbAuditLog,
+  createTbAuditEntry,
+  getTbExportHistory,
+  createTbExportEntry,
+  getTbSettings,
+  updateTbSettings,
 };

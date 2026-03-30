@@ -133,6 +133,7 @@ function GraphingStudioContent() {
                 <AnalysisReport
                   result={state.statResult}
                   onClear={() => dispatch({ type: 'SET_STAT_RESULT', payload: null })}
+                  datasetId={state.activeDatasetId || undefined}
                 />
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-tertiary)' }}>
@@ -301,6 +302,7 @@ function GraphingStudioContent() {
             <AnalysisReport
               result={state.statResult}
               onClear={() => dispatch({ type: 'SET_STAT_RESULT', payload: null })}
+              datasetId={state.activeDatasetId || undefined}
             />
           </div>
         );

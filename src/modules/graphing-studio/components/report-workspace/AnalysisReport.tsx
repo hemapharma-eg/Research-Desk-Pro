@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import type { StatTestResult, PairwiseComparison, DescriptiveStats } from '../../utils/statService';
 
 interface AnalysisReportProps {
   result: StatTestResult | null;
   onClear?: () => void;
+  datasetId?: string;
+  analysisId?: string;
 }
 
 function formatP(p: number): string {
@@ -26,7 +29,10 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function AnalysisReport({ result, onClear }: AnalysisReportProps) {
+export function AnalysisReport({ result, onClear, datasetId, analysisId }: AnalysisReportProps) {
+  const [showSendMenu, setShowSendMenu] = useState(false);
+  const [sentStatus, setSentStatus] = useState<'idle' | 'sent'>('idle');
+
   if (!result) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
@@ -69,14 +75,100 @@ export function AnalysisReport({ result, onClear }: AnalysisReportProps) {
 
   const interpretationText = generateInterpretation();
 
+  const handleSendToTableBuilder = (builderType?: string) => {
+    const payload = {
+      statResult: result,
+      datasetId: datasetId || null,
+      analysisId: analysisId || null,
+      builderType: builderType || 'auto',
+    };
+    window.dispatchEvent(new CustomEvent('send-to-table-builder', { detail: payload }));
+    setSentStatus('sent');
+    setShowSendMenu(false);
+    setTimeout(() => setSentStatus('idle'), 3000);
+  };
+
+  const BUILDER_OPTIONS = [
+    { id: 'auto', label: '🤖 Auto-detect best builder', desc: 'Choose based on test type' },
+    { id: 'descriptive', label: '📊 Descriptive Statistics', desc: 'Mean, SD, SEM, CI' },
+    { id: 'comparative', label: '⚖️ Comparative Results', desc: 'Multi-group comparisons' },
+    { id: 'regression', label: '📈 Regression Summary', desc: 'Coefficients, SE, CI, p' },
+    { id: 'anova', label: '🔬 ANOVA / Post-Hoc', desc: 'Omnibus + pairwise' },
+    { id: 'correlation', label: '🔗 Correlation Matrix', desc: 'r values with significance' },
+    { id: 'baseline', label: '📋 Baseline Characteristics', desc: 'Table 1 demographics' },
+  ];
+
   return (
     <div style={{ padding: '20px', maxWidth: '900px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ fontSize: '18px', fontWeight: 'bold' }}>{result.testName}</h2>
-        {onClear && (
-          <button className="gs-btn gs-btn-sm" onClick={onClear}>Clear Results</button>
-        )}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Send to Table Builder */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className="gs-btn gs-btn-sm"
+              onClick={() => setShowSendMenu(!showSendMenu)}
+              style={{
+                background: sentStatus === 'sent' ? '#16A34A' : 'var(--color-accent-primary)',
+                color: 'white',
+                border: 'none',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: '12px',
+                transition: 'background 0.2s',
+              }}
+            >
+              {sentStatus === 'sent' ? '✓ Sent to Table Builder' : '📋 Send to Table Builder ▾'}
+            </button>
+            {showSendMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                background: 'var(--color-bg-surface)',
+                border: '1px solid var(--color-border-light)',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                width: '280px',
+                zIndex: 1000,
+                overflow: 'hidden',
+              }}>
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border-light)', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Choose Table Type
+                </div>
+                {BUILDER_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleSendToTableBuilder(opt.id)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      borderBottom: '1px solid var(--color-border-light)',
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                    onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div style={{ fontWeight: 500 }}>{opt.label}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {onClear && (
+            <button className="gs-btn gs-btn-sm" onClick={onClear}>Clear Results</button>
+          )}
+        </div>
       </div>
 
       {/* Summary Card */}
@@ -127,7 +219,12 @@ export function AnalysisReport({ result, onClear }: AnalysisReportProps) {
       {/* Assumption Checks */}
       {(result.normalityTest || result.varianceTest) && (
         <div className="gs-report-block">
-          <div className="gs-report-header"><span>Assumption Checks</span></div>
+          <div className="gs-report-header">
+            <span>Assumption Checks</span>
+            <button className="gs-btn gs-btn-sm" onClick={() => handleSendToTableBuilder('normality')}>
+              📋 Send table to builder ▾
+            </button>
+          </div>
           <div className="gs-report-body">
             {result.normalityTest && (
               <>
@@ -164,7 +261,12 @@ export function AnalysisReport({ result, onClear }: AnalysisReportProps) {
         <div className="gs-report-block">
           <div className="gs-report-header">
             <span>Descriptive Statistics</span>
-            <CopyButton text={descToCSV(result.descriptives)} />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <CopyButton text={descToCSV(result.descriptives)} />
+              <button className="gs-btn gs-btn-sm" onClick={() => handleSendToTableBuilder('descriptive')}>
+                📋 Send table to builder ▾
+              </button>
+            </div>
           </div>
           <div className="gs-report-body" style={{ overflowX: 'auto' }}>
             <table className="gs-table">

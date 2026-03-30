@@ -253,6 +253,7 @@ export function DocumentEditor() {
               documentTitle={titleValue}
               content={contentValue}
               onChange={(html) => setContentValue(html)}
+              documentId={activeDoc?.id || null}
             />
           </div>
         )}

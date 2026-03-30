@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './styles/design-system.css';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { ReferenceManager } from './modules/reference-manager/ReferenceManager';
@@ -6,11 +6,39 @@ import { DocumentEditor } from './modules/document-editor/DocumentEditor';
 import { GraphingStudio } from './modules/graphing-studio/GraphingStudio';
 import { PowerAnalysis } from './modules/power-analysis/PowerAnalysis';
 import { SystematicReviewStudio } from './modules/systematic-review/SystematicReviewStudio';
+import { TableBuilder } from './modules/table-builder/TableBuilder';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 
 function AppContent() {
   const [activeModule, setActiveModule] = useState('dashboard');
   const { currentProject } = useProject();
+
+  const handleSendToTableBuilder = useCallback((e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    (window as any).__pendingTableImport = detail;
+    setActiveModule('table-builder');
+    // Forward the payload to the Table Builder module after navigation
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('table-builder:receive-stat-import', { detail }));
+    }, 300);
+  }, []);
+
+  // Generic cross-module navigation
+  const handleNavigateToModule = useCallback((e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    if (detail?.module) {
+      setActiveModule(detail.module);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('send-to-table-builder', handleSendToTableBuilder);
+    window.addEventListener('navigate-to-module', handleNavigateToModule);
+    return () => {
+      window.removeEventListener('send-to-table-builder', handleSendToTableBuilder);
+      window.removeEventListener('navigate-to-module', handleNavigateToModule);
+    };
+  }, [handleSendToTableBuilder, handleNavigateToModule]);
 
   const renderModuleContent = () => {
     switch (activeModule) {
@@ -26,6 +54,8 @@ function AppContent() {
         return <PowerAnalysis />;
       case 'systematic-review':
         return <SystematicReviewStudio />;
+      case 'table-builder':
+        return <TableBuilder />;
       default:
         return (
           <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-lg)' }}>
@@ -53,7 +83,7 @@ function AppContent() {
           </div>
           
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-            {['Dashboard', 'Reference Manager', 'Document Editor', 'Graphing Studio', 'Power Analysis', 'Systematic Review'].map((item) => {
+            {['Dashboard', 'Reference Manager', 'Document Editor', 'Graphing Studio', 'Power Analysis', 'Systematic Review', 'Table Builder'].map((item) => {
               const id = item.toLowerCase().replace(' ', '-');
               const isActive = activeModule === id;
               return (

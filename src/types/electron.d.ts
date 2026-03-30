@@ -165,6 +165,31 @@ export interface ElectronAPI {
   exportCollaborationData: (reviewerId: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
   importCollaborationData: () => Promise<{ success: boolean; stats?: any; canceled?: boolean; error?: string }>;
   exportToGraphingStudio: (refs: any[]) => Promise<{ success: boolean; datasetId?: string | number; error?: string }>;
+
+  // Table Builder
+  getTbTables: () => Promise<{ success: boolean; data?: TbTableRow[]; error?: string }>;
+  getTbTable: (id: string) => Promise<{ success: boolean; data?: TbTableRow; error?: string }>;
+  createTbTable: (data: Partial<TbTableRow>) => Promise<{ success: boolean; data?: TbTableRow; error?: string }>;
+  updateTbTable: (id: string, updates: Partial<TbTableRow>) => Promise<{ success: boolean; data?: TbTableRow; error?: string }>;
+  deleteTbTable: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getTbNarratives: (tableId?: string) => Promise<{ success: boolean; data?: TbNarrativeRow[]; error?: string }>;
+  createTbNarrative: (data: Partial<TbNarrativeRow>) => Promise<{ success: boolean; data?: TbNarrativeRow; error?: string }>;
+  updateTbNarrative: (id: string, updates: Partial<TbNarrativeRow>) => Promise<{ success: boolean; data?: TbNarrativeRow; error?: string }>;
+  deleteTbNarrative: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getTbDocLinks: (tableId?: string) => Promise<{ success: boolean; data?: TbDocLinkRow[]; error?: string }>;
+  createTbDocLink: (data: Partial<TbDocLinkRow>) => Promise<{ success: boolean; data?: TbDocLinkRow; error?: string }>;
+  updateTbDocLink: (id: string, updates: Partial<TbDocLinkRow>) => Promise<{ success: boolean; data?: TbDocLinkRow; error?: string }>;
+  deleteTbDocLink: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getTbAuditLog: (tableId: string) => Promise<{ success: boolean; data?: TbAuditRow[]; error?: string }>;
+  createTbAuditEntry: (data: Partial<TbAuditRow>) => Promise<{ success: boolean; data?: TbAuditRow; error?: string }>;
+  getTbExportHistory: (tableId: string) => Promise<{ success: boolean; data?: TbExportRow[]; error?: string }>;
+  createTbExportEntry: (data: Partial<TbExportRow>) => Promise<{ success: boolean; data?: TbExportRow; error?: string }>;
+  getTbSettings: () => Promise<{ success: boolean; data?: string; error?: string }>;
+  updateTbSettings: (settings_json: string) => Promise<{ success: boolean; error?: string }>;
+  exportTbPDF: (html: string, defaultName?: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+  exportTbCSV: (csvContent: string, defaultName?: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+  exportTbImage: (imageDataUrl: string, defaultName?: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+  importTbCSV: () => Promise<{ success: boolean; data?: { content: string; fileName: string; filePath: string }; canceled?: boolean; error?: string }>;
 }
 
 // Graphing Studio DB Row Types
@@ -238,8 +263,80 @@ export interface ReviewerDecision {
   timestamp: string;
 }
 
+// Table Builder DB Row Types
+export interface TbTableRow {
+  id: string;
+  name: string;
+  title: string;
+  caption: string;
+  table_type: string;
+  table_number: string;
+  numbering_mode: string;
+  category: string;
+  style_preset: string;
+  columns_json: string;
+  rows_json: string;
+  grouped_headers_json: string;
+  footnotes_json: string;
+  source_analysis_id: string | null;
+  source_dataset_id: string | null;
+  source_mapping_json: string;
+  link_status: string;
+  last_refresh_at: string | null;
+  style_options_json: string;
+  section_target: string;
+  keywords: string;
+  notes_to_self: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+}
+
+export interface TbNarrativeRow {
+  id: string;
+  table_id: string;
+  narrative_type: string;
+  tone: string;
+  content: string;
+  settings_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TbDocLinkRow {
+  id: string;
+  table_id: string;
+  document_id: string;
+  insertion_type: string;
+  position_marker: string;
+  caption_placement: string;
+  include_footnotes: number;
+  include_narrative: number;
+  last_synced_at: string | null;
+  update_status: string;
+  created_at: string;
+}
+
+export interface TbAuditRow {
+  id: string;
+  table_id: string;
+  action: string;
+  details_json: string;
+  timestamp: string;
+}
+
+export interface TbExportRow {
+  id: string;
+  table_id: string;
+  format: string;
+  file_path: string;
+  options_json: string;
+  exported_at: string;
+}
+
 declare global {
   interface Window {
     api: ElectronAPI;
   }
 }
+
