@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   updateDocument: (id, updates) => ipcRenderer.invoke('document:update', id, updates),
   deleteDocument: (id) => ipcRenderer.invoke('document:delete', id),
   exportDocx: (html, title) => ipcRenderer.invoke('document:exportDocx', html, title),
+  importDocx: () => ipcRenderer.invoke('document:importDocx'),
 
   // Graphing Studio
   getGraphingDatasets: () => ipcRenderer.invoke('graphing:getDatasets'),

@@ -488,6 +488,39 @@ ipcMain.handle('document:exportDocx', async (event, html, defaultTitle = 'Docume
   }
 });
 
+// --- Import DOCX (for Integrity Checker) ---
+ipcMain.handle('document:importDocx', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import DOCX Manuscript',
+      filters: [{ name: 'Word Document', extensions: ['docx'] }],
+      properties: ['openFile']
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const filePath = filePaths[0];
+    const mammoth = require('mammoth');
+    const result = await mammoth.convertToHtml({ path: filePath });
+    const fileName = path.basename(filePath, path.extname(filePath));
+
+    return {
+      success: true,
+      data: {
+        html: result.value,
+        fileName,
+        filePath,
+        warnings: result.messages.filter(m => m.type === 'warning').map(m => m.message)
+      }
+    };
+  } catch (error) {
+    console.error('Import DOCX Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // --- Graphing Studio: Datasets ---
 ipcMain.handle('graphing:getDatasets', async () => {
   try {

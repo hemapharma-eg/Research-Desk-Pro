@@ -29,6 +29,8 @@ export function IntegrityCheckerHome() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('setup');
   const [currentSession, setCurrentSession] = useState<ScanSessionResult | null>(null);
   const [pastSessions, setPastSessions] = useState<any[]>([]);
+  // Store the HTML content for the current scan (for the Document Evidence viewer)
+  const [scanHtmlContent, setScanHtmlContent] = useState<string>('');
 
   useEffect(() => {
     fetchPastSessions();
@@ -73,6 +75,18 @@ export function IntegrityCheckerHome() {
         }
       };
 
+      // Try to reload the original document's HTML for the evidence viewer
+      if (parent.document_id) {
+        try {
+          const docRes = await window.api.getDocument(parent.document_id);
+          if (docRes?.success && docRes.data?.content) {
+            setScanHtmlContent(docRes.data.content);
+          }
+        } catch (e) {
+          console.warn('Could not reload document HTML for evidence viewer');
+        }
+      }
+
       setCurrentSession(reconstructedSession);
       setActiveTab('results');
     } catch (err) {
@@ -94,21 +108,10 @@ export function IntegrityCheckerHome() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [activeTab]);
 
-  const handleStartScan = async (config: IntegrityScanConfig, documentId: string) => {
+  const runScanFromHtmlContent = async (config: IntegrityScanConfig, htmlContent: string, documentId: string) => {
     setActiveTab('progress');
 
     try {
-      // Fetch the full document (including HTML content)
-      const docRes = await window.api.getDocument(documentId);
-      if (!docRes.success || !docRes.data) {
-        console.error('Failed to fetch document for scan');
-        setActiveTab('setup');
-        return;
-      }
-
-      const doc = docRes.data;
-      const htmlContent = doc.content || '';
-
       // Fetch cross-reference data
       const refsRes = await window.api.getReferences();
       const globalReferences = refsRes?.success ? (refsRes.data || []) : [];
@@ -144,6 +147,7 @@ export function IntegrityCheckerHome() {
         console.error('Failed to persist scan results to DB:', dbErr);
       }
 
+      setScanHtmlContent(htmlContent);
       setCurrentSession(result);
       setActiveTab('results');
       
@@ -153,6 +157,30 @@ export function IntegrityCheckerHome() {
       console.error('Integrity scan error:', err);
       setActiveTab('setup');
     }
+  };
+
+  const handleStartScan = async (config: IntegrityScanConfig, documentId: string) => {
+    try {
+      // Fetch the full document (including HTML content)
+      const docRes = await window.api.getDocument(documentId);
+      if (!docRes.success || !docRes.data) {
+        console.error('Failed to fetch document for scan');
+        return;
+      }
+
+      const doc = docRes.data;
+      const htmlContent = doc.content || '';
+      await runScanFromHtmlContent(config, htmlContent, documentId);
+    } catch (err) {
+      console.error('Integrity scan error:', err);
+      setActiveTab('setup');
+    }
+  };
+
+  const handleStartScanFromHtml = async (config: IntegrityScanConfig, html: string, fileName: string) => {
+    // Use the fileName as a pseudo document ID for external DOCX
+    const pseudoDocId = `external-docx-${Date.now()}`;
+    await runScanFromHtmlContent(config, html, pseudoDocId);
   };
 
   return (
@@ -267,7 +295,7 @@ export function IntegrityCheckerHome() {
               </div>
             )}
             
-            <ScanConfiguration onStartScan={handleStartScan} />
+            <ScanConfiguration onStartScan={handleStartScan} onStartScanFromHtml={handleStartScanFromHtml} />
           </div>
         )}
 
@@ -276,7 +304,7 @@ export function IntegrityCheckerHome() {
         )}
 
         {activeTab === 'results' && currentSession && (
-          <ResultsDashboard session={currentSession} onUpdateSession={setCurrentSession} />
+          <ResultsDashboard session={currentSession} onUpdateSession={setCurrentSession} htmlContent={scanHtmlContent} />
         )}
 
         {activeTab === 'cross-references' && currentSession && (

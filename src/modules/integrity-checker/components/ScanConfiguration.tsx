@@ -3,6 +3,7 @@ import type { IntegrityScanConfig } from '../types/IntegrityTypes';
 
 interface ScanConfigurationProps {
   onStartScan: (config: IntegrityScanConfig, documentId: string) => void;
+  onStartScanFromHtml: (config: IntegrityScanConfig, html: string, fileName: string) => void;
 }
 
 const categories = [
@@ -58,7 +59,9 @@ const categories = [
   },
 ];
 
-export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
+type SourceMode = 'project' | 'upload';
+
+export function ScanConfiguration({ onStartScan, onStartScanFromHtml }: ScanConfigurationProps) {
   const [config, setConfig] = useState<IntegrityScanConfig>({
     categories: ['references', 'formatting', 'data_consistency', 'abbreviations', 'cross_references', 'compliance'],
     strictMode: false,
@@ -70,6 +73,12 @@ export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'categories' | 'advanced'>('categories');
+
+  // Upload DOCX state
+  const [sourceMode, setSourceMode] = useState<SourceMode>('project');
+  const [uploadedFile, setUploadedFile] = useState<{ html: string; fileName: string; filePath: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     window.api.getDocuments().then((res: any) => {
@@ -83,14 +92,12 @@ export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        if (selectedDocId && config.categories.length > 0) {
-          onStartScan(config, selectedDocId);
-        }
+        handleRunScan();
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [config, selectedDocId, onStartScan]);
+  }, [config, selectedDocId, sourceMode, uploadedFile, onStartScan, onStartScanFromHtml]);
 
   const toggleSelectAll = () => {
     const allIds = categories.map(c => c.id);
@@ -100,6 +107,42 @@ export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
       categories: allSelected ? [] : allIds as any[],
     });
   };
+
+  const handleUploadDocx = async () => {
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const res = await window.api.importDocx();
+      if (res.canceled) {
+        setIsUploading(false);
+        return;
+      }
+      if (!res.success || !res.data) {
+        setUploadError(res.error || 'Failed to import DOCX file.');
+        setIsUploading(false);
+        return;
+      }
+      setUploadedFile({ html: res.data.html, fileName: res.data.fileName, filePath: res.data.filePath });
+      setIsUploading(false);
+    } catch (err: any) {
+      setUploadError(err.message || 'Unknown error importing DOCX.');
+      setIsUploading(false);
+    }
+  };
+
+  const handleRunScan = () => {
+    if (config.categories.length === 0) return;
+    if (sourceMode === 'project') {
+      if (selectedDocId) onStartScan(config, selectedDocId);
+    } else {
+      if (uploadedFile) onStartScanFromHtml(config, uploadedFile.html, uploadedFile.fileName);
+    }
+  };
+
+  const canRun = config.categories.length > 0 && (
+    (sourceMode === 'project' && !!selectedDocId) ||
+    (sourceMode === 'upload' && !!uploadedFile)
+  );
 
   return (
     <div style={{ maxWidth: '780px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -118,11 +161,11 @@ export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
           Configure Integrity Audit
         </h3>
         <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-sm)', maxWidth: '460px', margin: '0 auto' }}>
-          Select a document and choose which audit categories to evaluate before running.
+          Select a project document or upload an external DOCX manuscript to audit.
         </p>
       </div>
 
-      {/* Document Selection Card */}
+      {/* Document Source Card */}
       <div className="card" style={{ padding: 'var(--space-4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -130,21 +173,179 @@ export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
           </svg>
           <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-semibold)' }}>Target Document</h3>
         </div>
-        <p className="text-secondary" style={{ marginBottom: 'var(--space-3)', fontSize: 'var(--font-size-sm)' }}>
-          Select the document you want to audit for integrity and compliance issues.
-        </p>
-        <select
-          className="input"
-          style={{ width: '100%' }}
-          value={selectedDocId}
-          onChange={e => setSelectedDocId(e.target.value)}
-        >
-          {docs.length > 0 ? (
-            docs.map((d: any) => <option key={d.id} value={d.id}>{d.title}</option>)
-          ) : (
-            <option value="">No documents found in project</option>
-          )}
-        </select>
+
+        {/* Source Mode Switcher */}
+        <div style={{ display: 'flex', gap: 0, marginBottom: 'var(--space-3)', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--color-border-light)' }}>
+          <button
+            onClick={() => setSourceMode('project')}
+            style={{
+              flex: 1, padding: 'var(--space-2) var(--space-3)', border: 'none', cursor: 'pointer',
+              fontSize: 'var(--font-size-sm)', fontWeight: sourceMode === 'project' ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
+              backgroundColor: sourceMode === 'project' ? 'var(--color-accent-primary)' : 'transparent',
+              color: sourceMode === 'project' ? '#fff' : 'var(--color-text-secondary)',
+              transition: 'all 0.15s ease',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            Project Document
+          </button>
+          <button
+            onClick={() => setSourceMode('upload')}
+            style={{
+              flex: 1, padding: 'var(--space-2) var(--space-3)', border: 'none', cursor: 'pointer',
+              fontSize: 'var(--font-size-sm)', fontWeight: sourceMode === 'upload' ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
+              backgroundColor: sourceMode === 'upload' ? 'var(--color-accent-primary)' : 'transparent',
+              color: sourceMode === 'upload' ? '#fff' : 'var(--color-text-secondary)',
+              transition: 'all 0.15s ease',
+              borderLeft: '1px solid var(--color-border-light)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Upload DOCX
+          </button>
+        </div>
+
+        {sourceMode === 'project' ? (
+          <>
+            <p className="text-secondary" style={{ marginBottom: 'var(--space-3)', fontSize: 'var(--font-size-sm)' }}>
+              Select the document you want to audit for integrity and compliance issues.
+            </p>
+            <select
+              className="input"
+              style={{ width: '100%' }}
+              value={selectedDocId}
+              onChange={e => setSelectedDocId(e.target.value)}
+            >
+              {docs.length > 0 ? (
+                docs.map((d: any) => <option key={d.id} value={d.id}>{d.title}</option>)
+              ) : (
+                <option value="">No documents found in project</option>
+              )}
+            </select>
+          </>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <p className="text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
+              Upload an external Word document (.docx) to check its integrity and compliance.
+            </p>
+
+            {!uploadedFile ? (
+              <button
+                className="btn btn-secondary"
+                onClick={handleUploadDocx}
+                disabled={isUploading}
+                style={{
+                  width: '100%',
+                  padding: 'var(--space-5)',
+                  border: '2px dashed var(--color-border-light)',
+                  borderRadius: 'var(--radius-lg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  cursor: 'pointer',
+                  backgroundColor: 'rgba(41,98,255,0.02)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {isUploading ? (
+                  <>
+                    <div style={{
+                      width: '20px', height: '20px', border: '2px solid var(--color-accent-primary)',
+                      borderTopColor: 'transparent', borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                    }} />
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-tertiary)' }}>
+                      Processing DOCX...
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)' }}>
+                      Click to select a DOCX file
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                      Supports .docx format (Word 2007+)
+                    </span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div style={{
+                padding: 'var(--space-3)',
+                border: '1px solid rgba(41,98,255,0.3)',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'rgba(41,98,255,0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+              }}>
+                <div style={{
+                  width: '40px', height: '40px', borderRadius: 'var(--radius-md)',
+                  background: 'linear-gradient(135deg, #2b579a, #3b6cb4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontWeight: 'bold', fontSize: 'var(--font-size-xs)',
+                  flexShrink: 0,
+                }}>
+                  DOCX
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {uploadedFile.fileName}.docx
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                    Ready for integrity scan
+                  </div>
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px', flexShrink: 0 }}
+                  onClick={() => { setUploadedFile(null); setUploadError(null); }}
+                >
+                  Remove
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px', flexShrink: 0 }}
+                  onClick={handleUploadDocx}
+                >
+                  Replace
+                </button>
+              </div>
+            )}
+
+            {uploadError && (
+              <div style={{
+                padding: 'var(--space-2) var(--space-3)',
+                backgroundColor: 'rgba(255, 61, 113, 0.08)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--color-danger)',
+                fontSize: 'var(--font-size-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {uploadError}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -293,12 +494,12 @@ export function ScanConfiguration({ onStartScan }: ScanConfigurationProps) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: 'var(--space-4)' }}>
         <button
           className="btn btn-primary"
-          onClick={() => onStartScan(config, selectedDocId)}
-          disabled={!selectedDocId || config.categories.length === 0}
+          onClick={handleRunScan}
+          disabled={!canRun}
           style={{
             gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-6)',
             fontSize: 'var(--font-size-md)',
-            opacity: (!selectedDocId || config.categories.length === 0) ? 0.5 : 1,
+            opacity: !canRun ? 0.5 : 1,
           }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

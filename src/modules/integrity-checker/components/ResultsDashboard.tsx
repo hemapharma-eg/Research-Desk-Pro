@@ -4,7 +4,7 @@ import { FindingsTable } from './FindingsTable';
 import { IssueDetailViewer } from './IssueDetailViewer';
 import { DocumentEvidenceViewer } from './DocumentEvidenceViewer';
 
-export function ResultsDashboard({ session, onUpdateSession }: { session: ScanSessionResult; onUpdateSession?: (session: ScanSessionResult) => void }) {
+export function ResultsDashboard({ session, onUpdateSession, htmlContent }: { session: ScanSessionResult; onUpdateSession?: (session: ScanSessionResult) => void; htmlContent?: string }) {
   const [selectedFinding, setSelectedFinding] = useState<IntegrityFinding | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -96,7 +96,7 @@ export function ResultsDashboard({ session, onUpdateSession }: { session: ScanSe
         {/* Right Panel: Evidence Document Viewer */}
         <div style={{ width: '400px', display: 'flex', flexDirection: 'column' }}>
           {selectedFinding ? (
-            <DocumentEvidenceViewer finding={selectedFinding} />
+            <DocumentEvidenceViewer finding={selectedFinding} htmlContent={htmlContent} />
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', backgroundColor: 'var(--color-bg-app)' }}>
               Evidence viewer

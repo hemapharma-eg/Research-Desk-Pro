@@ -125,6 +125,7 @@ export interface ElectronAPI {
   updateDocument: (id: string, updates: {title?: string, content?: string}) => Promise<{ success: boolean; data?: Document; error?: string }>;
   deleteDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
   exportDocx: (html: string, title?: string) => Promise<{ success: boolean; filePath?: string; error?: string; canceled?: boolean }>;
+  importDocx: () => Promise<{ success: boolean; data?: { html: string; fileName: string; filePath: string; warnings: string[] }; canceled?: boolean; error?: string }>;
 
   // Graphing Studio
   getGraphingDatasets: () => Promise<{ success: boolean; data?: GraphingDatasetRow[]; error?: string }>;
