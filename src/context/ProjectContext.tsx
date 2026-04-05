@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 
 interface ProjectContextType {
   currentProject: string | null;
+  projectLoadTime: number;
   setCurrentProject: (path: string | null) => void;
   isLoading: boolean;
   error: string | null;
@@ -12,6 +13,7 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [currentProject, setCurrentProject] = useState<string | null>(null);
+  const [projectLoadTime, setProjectLoadTime] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +24,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         const result = await window.api.getCurrentProject();
         if (result.success && result.path) {
           setCurrentProject(result.path);
+          setProjectLoadTime(Date.now()); // Distinguish instances of identical paths implicitly loading disjoint data
         }
       } catch (err: unknown) {
         console.error('Failed to get current project', err);
@@ -33,8 +36,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     fetchCurrentProject();
   }, []);
 
+  const handleSetCurrentProject = (path: string | null) => {
+    setCurrentProject(path);
+    setProjectLoadTime(Date.now()); // Invalidate memoized UI elements
+  };
+
   return (
-    <ProjectContext.Provider value={{ currentProject, setCurrentProject, isLoading, error, setError }}>
+    <ProjectContext.Provider value={{ currentProject, projectLoadTime, setCurrentProject: handleSetCurrentProject, isLoading, error, setError }}>
       {children}
     </ProjectContext.Provider>
   );

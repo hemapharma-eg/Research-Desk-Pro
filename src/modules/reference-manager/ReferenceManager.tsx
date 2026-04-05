@@ -40,7 +40,7 @@ const styles = {
 };
 
 export function ReferenceManager() {
-  const { currentProject } = useProject();
+  const { currentProject, projectLoadTime } = useProject();
   
   // Data State
   const [references, setReferences] = useState<Reference[]>([]);
@@ -105,7 +105,7 @@ export function ReferenceManager() {
     if (currentProject) {
       loadData();
     }
-  }, [currentProject]);
+  }, [currentProject, projectLoadTime]);
 
   // --- ACTIONS ---
   

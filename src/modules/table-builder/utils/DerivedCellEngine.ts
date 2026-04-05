@@ -37,13 +37,14 @@ function extractColValues(rows: TBRow[], colId: string): number[] {
  * =PCT(cell, total)
  */
 export function evaluateFormula(formula: string, rows: TBRow[], currentRowId: string): FormulaResult {
-  const upper = formula.trim().toUpperCase();
-  if (!upper.startsWith('=')) return { value: formula };
+  const trimmed = formula.trim();
+  if (!trimmed.toUpperCase().startsWith('=')) return { value: formula };
 
-  const match = upper.match(/^=([A-Z_]+)\(([^)]+)\)$/);
+  const match = trimmed.match(/^=([a-zA-Z_]+)\(([^)]+)\)$/);
   if (!match) return { value: null, error: 'Invalid formula syntax' };
 
-  const [, funcName, argsStr] = match;
+  const funcName = match[1].toUpperCase();
+  const argsStr = match[2];
   const args = argsStr.split(',').map(s => s.trim());
 
   switch (funcName) {

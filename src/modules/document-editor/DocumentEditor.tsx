@@ -4,7 +4,7 @@ import type { DocMetadata, Document } from '../../types/electron.d';
 import { TipTapEditor } from './TipTapEditor';
 
 export function DocumentEditor() {
-  const { currentProject } = useProject();
+  const { currentProject, projectLoadTime } = useProject();
   const [documents, setDocuments] = useState<DocMetadata[]>([]);
   const [activeDoc, setActiveDoc] = useState<Document | null>(null);
   
@@ -39,7 +39,7 @@ export function DocumentEditor() {
     if (currentProject) {
       loadDocumentsList();
     }
-  }, [currentProject]);
+  }, [currentProject, projectLoadTime]);
 
   // Load a specific document into the editor
   const loadDocument = async (id: string) => {

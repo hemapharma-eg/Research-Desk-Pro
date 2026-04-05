@@ -3,9 +3,10 @@ const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
 const protocol = electron.protocol;
 const path = require('node:path');
+const dbManager = require('./db.js');
 
 process.env.DIST = path.join(__dirname, '../../dist');
-process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public');
+process.env.VITE_PUBLIC = (app && app.isPackaged) ? process.env.DIST : path.join(process.env.DIST, '../public');
 
 let win;
 const VITE_DEV_SERVER_URL = "http://localhost:5173";
@@ -34,9 +35,15 @@ function createWindow() {
 }
 
 app.on('window-all-closed', () => {
+  // Always close SQLite thoroughly before UI exits to ensure MAC caching checkpoint
+  dbManager.closeDatabase();
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  dbManager.closeDatabase();
 });
 
 app.whenReady().then(() => {

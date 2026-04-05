@@ -1,4 +1,5 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, type ReactNode } from 'react';
+import { useProject } from '../../context/ProjectContext';
 import type { PublicationDataset, VariableMapping, DataColumn, DataRow } from './types/GraphingCoreTypes';
 import type { GraphStyleOptions } from './types/GraphStyleOptions';
 import { DEFAULT_STYLE_OPTIONS } from './types/GraphStyleOptions';
@@ -181,6 +182,7 @@ function defaultRows(columns: DataColumn[]): DataRow[] {
 
 // ===================== Provider =====================
 export function GraphingStudioProvider({ children }: { children: ReactNode }) {
+  const { currentProject, projectLoadTime } = useProject();
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 
   const loadDatasetList = useCallback(async () => {
@@ -312,11 +314,15 @@ export function GraphingStudioProvider({ children }: { children: ReactNode }) {
     }
   }, [state.activeDatasetId, state.analysisList]);
 
-  // Auto-load on mount
+  // Auto-load on mount or project switch
   useEffect(() => {
-    loadDatasetList();
-    loadFigureList();
-  }, [loadDatasetList, loadFigureList]);
+    if (currentProject) {
+      // Clear active dataset since the underlying database changed completely!
+      dispatch({ type: 'CLOSE_DATASET' });
+      loadDatasetList();
+      loadFigureList();
+    }
+  }, [currentProject, projectLoadTime, loadDatasetList, loadFigureList]);
 
   // Autosave (debounced)
   useEffect(() => {

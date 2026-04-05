@@ -244,6 +244,15 @@ function initDatabase(projectPath) {
     const stmt = db.prepare(`INSERT OR IGNORE INTO metadata (key, value) VALUES ('created_at', ?)`);
     stmt.run(new Date().toISOString());
 
+    // Confirm readiness and log diagnostic status
+    try {
+      const refCount = db.prepare('SELECT count(*) as c FROM references_list').get().c;
+      console.log(`[DB INIT] Project opened securely: ${projectPath}`);
+      console.log(`[DB INIT] Bootstrapper verified ${refCount} references loaded from intact db.`);
+    } catch(err) {
+      console.warn('[DB INIT] Readiness check failed! Schema could be corrupt:', err.message);
+    }
+
     return { success: true, path: projectPath };
   } catch (error) {
     console.error('Database initialization failed:', error);
@@ -272,9 +281,17 @@ function setMetadata(key, value) {
 
 function closeDatabase() {
   if (db) {
+    try {
+      // Force all data in WAL to commit cleanly to main database file upon sleep/exit
+      db.pragma('wal_checkpoint(RESTART)');
+      console.log('[DB CLOSE] Checkpoint (RESTART) completed.');
+    } catch(err) {
+      console.warn('[DB CLOSE] WAL checkpoint partial or failed:', err.message);
+    }
     db.close();
     db = null;
     currentProjectPath = null;
+    console.log('[DB CLOSE] Database connection terminated successfully.');
   }
 }
 

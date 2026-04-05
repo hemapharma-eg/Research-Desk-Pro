@@ -61,6 +61,7 @@ interface ExtractedStats {
   se?: number;
   predictor?: string;
   groups?: { name: string; mean: number; sd: number; n: number }[];
+  controlGroupIndex?: number;
 }
 
 function extractStatsFromTable(table: TableDocument): ExtractedStats {
@@ -68,62 +69,110 @@ function extractStatsFromTable(table: TableDocument): ExtractedStats {
   const cols = table.columns;
   const dataRows = table.rows.filter(r => !r.sectionLabel && !r.isSeparator);
 
-  // Try to identify columns by title
-  const findCol = (patterns: string[]) => cols.find(c => patterns.some(p => c.title.toLowerCase().includes(p)));
-
+  const findCol = (patterns: string[]) => cols.find(c => {
+    const t = c.title.toLowerCase();
+    return patterns.some(p => {
+      if (p.length <= 2) {
+        return new RegExp(`\\b${p}\\b`).test(t) || t === p;
+      }
+      return t.includes(p);
+    });
+  });
+  
   const pCol = findCol(['p-value', 'p value', 'sig', 'significance', 'p']);
   const statCol = findCol(['statistic', 'test stat', 't', 'f', 'chi', 'z', 'u', 'w']);
+  const effectCol = findCol(['effect', 'cohen', 'eta', 'cramér', 'r²', 'r-sq', 'd', 'odds', 'hazard']);
   const dfCol = findCol(['df', 'degrees of freedom']);
-  const effectCol = findCol(['effect', "cohen", 'eta', "cramér", 'r²', 'r-sq', 'd', 'odds', 'hazard']);
-  const meanCol = findCol(['mean', 'avg', 'average', 'm']);
-  const sdCol = findCol(['sd', 'std', 'standard dev']);
-  const nCol = findCol(['n', 'count', 'sample']);
-  const ciLowCol = findCol(['lower', 'ci lower', 'ci_lower', 'll']);
-  const ciUpCol = findCol(['upper', 'ci upper', 'ci_upper', 'ul']);
-  const outcomeCol = findCol(['outcome', 'variable', 'measure', 'dependent']);
-  const betaCol = findCol(['beta', 'β', 'b', 'coef', 'coefficient', 'estimate']);
-  const seCol = findCol(['se', 'std error', 'standard error']);
-  const predictorCol = findCol(['predictor', 'independent', 'factor', 'covariate']);
 
-  stats.testName = table.tableType;
+  const getCellVal = (cell: any) => cell?.rawValue ?? cell?.displayValue;
 
-  if (dataRows.length > 0) {
-    const row0 = dataRows[0];
-    const getNum = (colId?: string) => {
-      if (!colId) return undefined;
-      const cell = row0.cells[colId];
-      if (!cell) return undefined;
-      const v = typeof cell.rawValue === 'number' ? cell.rawValue : parseFloat(String(cell.rawValue));
-      return isNaN(v) ? undefined : v;
-    };
-    const getStr = (colId?: string) => {
-      if (!colId) return undefined;
-      return row0.cells[colId]?.displayValue || undefined;
-    };
+  const getNumVal = (raw: any): number | undefined => {
+    if (raw === null || raw === undefined || raw === '') return undefined;
+    if (typeof raw === 'number') return raw;
+    const str = String(raw).trim();
+    const match = str.match(/[-+]?[0-9]*\.?[0-9]+/);
+    if (match) return parseFloat(match[0]);
+    return undefined;
+  };
 
-    stats.pValue = getNum(pCol?.id);
-    stats.statistic = getNum(statCol?.id);
-    stats.statisticLabel = statCol?.title;
-    stats.df = getStr(dfCol?.id);
-    stats.effectSize = getNum(effectCol?.id);
-    stats.effectSizeLabel = effectCol?.title;
-    stats.mean1 = getNum(meanCol?.id);
-    stats.sd1 = getNum(sdCol?.id);
-    stats.n1 = getNum(nCol?.id);
-    stats.ciLower = getNum(ciLowCol?.id);
-    stats.ciUpper = getNum(ciUpCol?.id);
-    stats.outcome = getStr(outcomeCol?.id);
-    stats.beta = getNum(betaCol?.id);
-    stats.se = getNum(seCol?.id);
-    stats.predictor = getStr(predictorCol?.id);
+  const getSdVal = (raw: any): number | undefined => {
+    if (!raw) return undefined;
+    const str = String(raw).trim();
+    const match = str.match(/[-+]?[0-9]*\.?[0-9]+\s*(?:±|\(|\[)\s*([-+]?[0-9]*\.?[0-9]+)/);
+    if (match && match[1]) return parseFloat(match[1]);
+    return undefined;
+  };
 
-    // Extract groups
-    stats.groups = dataRows.map((_, i) => ({
-      name: getStr(cols[0]?.id) || `Group ${i + 1}`,
-      mean: getNum(meanCol?.id) || 0,
-      sd: getNum(sdCol?.id) || 0,
-      n: getNum(nCol?.id) || 0,
+  const explicitMeanCol = findCol(['mean', 'avg', 'average', 'm']);
+  
+  if (explicitMeanCol) {
+    // Strategy A: Rows are groups, Columns are metrics
+    const sdCol = findCol(['sd', 'std', 'standard dev']);
+    const nCol = findCol(['n', 'count', 'sample']);
+    
+    stats.groups = dataRows.map((row, i) => ({
+      name: row.cells[cols[0]?.id]?.displayValue || `Group ${i + 1}`,
+      mean: getNumVal(getCellVal(row.cells[explicitMeanCol.id])) || 0,
+      sd: getNumVal(getCellVal(row.cells[sdCol?.id || ''])) || getSdVal(getCellVal(row.cells[explicitMeanCol.id])) || 0,
+      n: getNumVal(getCellVal(row.cells[nCol?.id || ''])) || 0,
     }));
+    
+    if (dataRows.length > 0) {
+      stats.pValue = getNumVal(getCellVal(dataRows[0].cells[pCol?.id || '']));
+      stats.statistic = getNumVal(getCellVal(dataRows[0].cells[statCol?.id || '']));
+      stats.statisticLabel = statCol?.title;
+      stats.effectSize = getNumVal(getCellVal(dataRows[0].cells[effectCol?.id || '']));
+      stats.effectSizeLabel = effectCol?.title;
+      stats.df = dataRows[0].cells[dfCol?.id || '']?.displayValue;
+    }
+  } else {
+    // Strategy B: Columns are groups, Rows are outcomes/variables
+    const groupCols = cols.filter(c => 
+      c.id !== cols[0]?.id && 
+      !c.title.toLowerCase().match(/p-value|p value|sig|\bp\b|statistic|test|difference|95%|lower|upper|ci/)
+    );
+
+    if (dataRows.length > 0) {
+      // Analyze the mostly significant row (lowest p-value) or just the first row
+      let primaryRow = dataRows[0];
+      if (pCol) {
+        let bestP = 999;
+        for (const row of dataRows) {
+           const pVal = getNumVal(getCellVal(row.cells[pCol.id]));
+           if (pVal !== undefined && pVal < bestP) {
+             bestP = pVal;
+             primaryRow = row;
+           }
+        }
+      }
+
+      stats.outcome = primaryRow.cells[cols[0]?.id]?.displayValue || 'the evaluated measure';
+      
+      stats.groups = groupCols.map(c => {
+        const val = getCellVal(primaryRow.cells[c.id]);
+        return {
+          name: c.title,
+          mean: getNumVal(val) || 0,
+          sd: getSdVal(val) || 0,
+          n: 0,
+        };
+      });
+      
+      stats.pValue = getNumVal(getCellVal(primaryRow.cells[pCol?.id || '']));
+      stats.statistic = getNumVal(getCellVal(primaryRow.cells[statCol?.id || '']));
+      stats.statisticLabel = statCol?.title;
+    } else {
+      stats.groups = [];
+    }
+  }
+
+  // Identify control group based on naming conventions
+  if (stats.groups && stats.groups.length > 0) {
+    const controlKeywords = ['control', 'placebo', 'sham', 'vehicle', 'baseline', 'wt', 'wildtype', 'untreated'];
+    const cIndex = stats.groups.findIndex(g => controlKeywords.some(kw => g.name.toLowerCase().includes(kw)));
+    if (cIndex !== -1) {
+      stats.controlGroupIndex = cIndex;
+    }
   }
 
   return stats;
@@ -203,36 +252,73 @@ function generateExpanded(table: TableDocument, settings: NarrativeSettings): st
   }
 
   if (s.pValue === undefined) {
-    paragraphs.push(`Descriptive metrics demonstrated baseline variances, summarized comprehensively in the table.`);
+    paragraphs.push(`Descriptive summary metrics delineate the baseline distributions across the enumerated strata${apa}.`);
   } else {
     const isSig = sig(s.pValue);
     if (!isSig) {
        paragraphs.push(`Contrary to our primary hypothesis, the omnibus statistical analysis elucidated no significant main effect${apa}. Consequently, the substantive distributions remained statistically indistinguishable across the strata.`);
     } else {
        paragraphs.push(`The omnibus analysis revealed a robust and statistically significant main effect${apa}, confirming substantive variances across the tested conditions.`);
-       
-       // 2. Rhetorical magnitude breakdown
-       if (s.groups && s.groups.length >= 2) {
-         const sorted = [...s.groups].sort((a, b) => b.mean - a.mean);
-         const maxG = sorted[0];
-         const minG = sorted[sorted.length - 1];
-         
-         if (maxG.mean > minG.mean) {
-            const percentStr = getPercentDifference(minG.mean, maxG.mean);
-            const foldStr = getFoldChange(minG.mean, maxG.mean);
-            let magnitudeDesc = `representing an increase of ${percentStr}`;
-            if (foldStr) magnitudeDesc += ` (a ${foldStr} difference)`;
-            
-            paragraphs.push(`Subsequent inspection of the group differentials demonstrated that the ${maxG.name} cohort exhibited markedly elevated values (M = ${maxG.mean.toFixed(2)}, SD = ${maxG.sd.toFixed(2)}) relative to the ${minG.name} baseline (M = ${minG.mean.toFixed(2)}, SD = ${minG.sd.toFixed(2)}), ${magnitudeDesc}.`);
-         }
-       }
-       
-       // 3. Effect size discussion
-       if (settings.includeEffectSizes && s.effectSize !== undefined) {
-         const magnitude = Math.abs(s.effectSize) < 0.2 ? 'marginal' : Math.abs(s.effectSize) < 0.5 ? 'moderate' : Math.abs(s.effectSize) < 0.8 ? 'substantial' : 'profound';
-         paragraphs.push(`Importantly, the observed ${s.effectSizeLabel || 'effect size'} was calculated at ${s.effectSize.toFixed(2)}, denoting a ${magnitude} clinical or practical magnitude of effect.`);
-       }
     }
+  }
+
+  // 2. Rhetorical magnitude breakdown - Executes regardless of P-value
+  if (s.groups && s.groups.length >= 2) {
+    let controlG = undefined;
+    let expGroups = s.groups;
+
+    if (s.controlGroupIndex !== undefined && s.controlGroupIndex !== -1) {
+      controlG = s.groups[s.controlGroupIndex];
+      expGroups = s.groups.filter((_, i) => i !== s.controlGroupIndex);
+    }
+
+    if (controlG && expGroups.length > 0) {
+      // Compare to control
+      const comparisons = expGroups.map(g => {
+        const percentStr = getPercentDifference(controlG.mean, g.mean);
+        const foldStr = getFoldChange(controlG.mean, g.mean);
+        const direction = g.mean > controlG.mean ? 'elevation' : 'reduction';
+        let magnitudeDesc = `a ${percentStr} ${direction}`;
+        if (foldStr) magnitudeDesc += ` (${foldStr})`;
+        return `the ${g.name} cohort exhibited ${magnitudeDesc} (M = ${g.mean.toFixed(2)}, SD = ${g.sd.toFixed(2)}) compared to the ${controlG?.name} baseline (M = ${controlG?.mean.toFixed(2)}, SD = ${controlG?.sd.toFixed(2)})`;
+      });
+      
+      if (comparisons.length === 1) {
+        paragraphs.push(`Subsequent group-level inspection demonstrated that ${comparisons[0]}.`);
+      } else {
+        paragraphs.push(`Group-level evaluations revealed distinct gradations relative to baseline: ${comparisons.join('; and ')}.`);
+      }
+
+      // Inter-group if multiple experimental
+      if (expGroups.length > 1) {
+        const sortedExp = [...expGroups].sort((a, b) => b.mean - a.mean);
+        const maxExp = sortedExp[0];
+        const minExp = sortedExp[sortedExp.length - 1];
+        if (maxExp.mean > minExp.mean) {
+          paragraphs.push(`Furthermore, inter-group assessment between the active experimental arms highlighted that the ${maxExp.name} group yielded a markedly stronger response than the ${minExp.name} group, differing by ${getPercentDifference(minExp.mean, maxExp.mean)}.`);
+        }
+      }
+    } else {
+      // No control group, just compare max to min systematically
+      const sorted = [...s.groups].sort((a, b) => b.mean - a.mean);
+      const maxG = sorted[0];
+      const minG = sorted[sorted.length - 1];
+      
+      if (maxG.mean > minG.mean) {
+         const percentStr = getPercentDifference(minG.mean, maxG.mean);
+         const foldStr = getFoldChange(minG.mean, maxG.mean);
+         let magnitudeDesc = `representing an absolute contextual difference of ${percentStr}`;
+         if (foldStr) magnitudeDesc += ` (a ${foldStr} gradient)`;
+         
+         paragraphs.push(`Stratification of the group differentials designated the ${maxG.name} cohort as expressing the maximal response (M = ${maxG.mean.toFixed(2)}, SD = ${maxG.sd.toFixed(2)}), substantially exceeding the ${minG.name} cohort (M = ${minG.mean.toFixed(2)}, SD = ${minG.sd.toFixed(2)}), ${magnitudeDesc}.`);
+      }
+    }
+  }
+  
+  // 3. Effect size discussion
+  if (settings.includeEffectSizes && s.effectSize !== undefined) {
+    const magnitude = Math.abs(s.effectSize) < 0.2 ? 'marginal' : Math.abs(s.effectSize) < 0.5 ? 'moderate' : Math.abs(s.effectSize) < 0.8 ? 'substantial' : 'profound';
+    paragraphs.push(`Importantly, the calculated ${s.effectSizeLabel || 'effect magnitude'} stood at ${s.effectSize.toFixed(2)}, signifying a ${magnitude} practical impact of the evaluated condition.`);
   }
 
   return paragraphs.join(' ');
@@ -356,25 +442,55 @@ function generateMultiComparisonNarrative(table: TableDocument, settings: Narrat
   const apa = generateAPA(s, settings);
   const paragraphs: string[] = [];
 
-  paragraphs.push(`A comprehensive multi-comparative analysis was systematically undertaken to isolate specific cohort differentials.`);
+  paragraphs.push(`A comprehensive multi-comparative framework was deployed to isolate specific cohort differentials${s.outcome ? ` regarding ${s.outcome}` : ''}.`);
 
   if (s.pValue !== undefined && s.statisticLabel) {
     const isSig = sig(s.pValue);
     if (!isSig) {
-       paragraphs.push(`The omnibus test yielded no statistically significant deviation across the groups${apa}, suggesting overarching phenotypic homogeneity.`);
+       paragraphs.push(`The omnibus test yielded no statistically significant variance across the groups${apa}, suggesting overarching phenotypic homogeneity across all tested parameters.`);
     } else {
-       paragraphs.push(`The omnibus evaluation indicated a highly significant deviation across the sampled groups${apa}.`);
-       
-       if (s.groups && s.groups.length >= 3) {
-         const sorted = [...s.groups].sort((a, b) => b.mean - a.mean);
-         const maxG = sorted[0];
-         const minG = sorted[sorted.length - 1];
-         
-         const foldStr = getFoldChange(minG.mean, maxG.mean);
-         const foldDesc = foldStr ? `, evidencing a ${foldStr} gradient` : '';
-         
-         paragraphs.push(`Post-hoc algorithmic stratification revealed that the ${maxG.name} group presented the maximal magnitude (M = ${maxG.mean.toFixed(2)}), whereas the ${minG.name} cohort occupied the nadir of the distribution (M = ${minG.mean.toFixed(2)})${foldDesc}.`);
-       }
+       paragraphs.push(`The omnibus evaluation indicated a highly significant deviation across the sampled populations${apa}.`);
+    }
+  } else {
+    paragraphs.push(`Univariate descriptive arrays were compiled to assess inter-group magnitude shifts.`);
+  }
+
+  // Magnitude Breakdown
+  if (s.groups && s.groups.length >= 2) {
+    let controlG = undefined;
+    let expGroups = s.groups;
+
+    if (s.controlGroupIndex !== undefined && s.controlGroupIndex !== -1) {
+      controlG = s.groups[s.controlGroupIndex];
+      expGroups = s.groups.filter((_, i) => i !== s.controlGroupIndex);
+    }
+
+    if (controlG && expGroups.length > 0) {
+      const sortedExp = [...expGroups].sort((a, b) => b.mean - a.mean);
+      const bestExp = sortedExp[0];
+      
+      const percentStr = getPercentDifference(controlG.mean, bestExp.mean);
+      const direction = bestExp.mean > controlG.mean ? 'exceeded' : 'was lower than';
+      const foldStr = getFoldChange(controlG.mean, bestExp.mean);
+      
+      paragraphs.push(`Algorithmic stratification isolated the ${bestExp.name} group as the principal driver of variance, which ${direction} the ${controlG.name} reference baseline by ${percentStr}${foldStr ? ` (${foldStr})` : ''} (M = ${bestExp.mean.toFixed(2)} vs. M = ${controlG.mean.toFixed(2)}).`);
+      
+      if (sortedExp.length > 1) {
+        const others = sortedExp.slice(1).map(g => g.name).join(' and ');
+        paragraphs.push(`Intermediate categorical effects were distributed across ${others}.`);
+      }
+    } else {
+      const sorted = [...s.groups].sort((a, b) => b.mean - a.mean);
+      const maxG = sorted[0];
+      const minG = sorted[sorted.length - 1];
+      
+      if (maxG.mean > minG.mean) {
+        const percentStr = getPercentDifference(minG.mean, maxG.mean);
+        const foldStr = getFoldChange(minG.mean, maxG.mean);
+        const foldDesc = foldStr ? `, evidencing a ${foldStr} proportional shift` : '';
+        
+        paragraphs.push(`Pairwise deconstruction revealed that the ${maxG.name} group established the upper bound of the response range (M = ${maxG.mean.toFixed(2)}). In contrast, the ${minG.name} cohort occupied the nadir (M = ${minG.mean.toFixed(2)}), culminating in a peak-to-trough differential of ${percentStr}${foldDesc}.`);
+      }
     }
   }
 
