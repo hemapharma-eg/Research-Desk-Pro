@@ -62,7 +62,7 @@ function initDb() {
         max_demo_export_resolution TEXT DEFAULT '72dpi',
         allow_demo_advanced_exports INTEGER DEFAULT 0,
         allow_demo_premium_templates INTEGER DEFAULT 0,
-        offline_grace_days INTEGER DEFAULT 7,
+        offline_grace_days INTEGER DEFAULT 30,
         reverify_after_hours INTEGER DEFAULT 72,
         support_email TEXT DEFAULT 'support@example.com',
         help_text TEXT DEFAULT 'Please contact support if you believe this license should be active.',

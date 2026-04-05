@@ -18,7 +18,7 @@ interface LicenseContextType {
   state: LicenseState;
   counters: DemoUsageCounters;
   entitlements: ReturnType<typeof EntitlementEngine.getEntitlements>;
-  refreshLicenseState: () => Promise<void>;
+  refreshLicenseState: () => Promise<any>;
   activateLicense: (data: any) => Promise<{success: boolean, error?: string}>;
   enterDemoMode: () => Promise<void>;
   trackUsage: (key: string, amount?: number) => Promise<void>;
@@ -53,24 +53,86 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [counters, setCounters] = useState<DemoUsageCounters>(defaultCounters);
 
   const refreshLicenseState = async () => {
+    let currentData = { deviceId: null as string | null, state: defaultState, counters: defaultCounters };
     try {
       if (window.electron?.ipcRenderer) {
         const payload = await window.electron.ipcRenderer.invoke('license:get-state');
         if (payload) {
-          setDeviceId(payload.deviceId);
-          setState(payload.state || defaultState);
-          setCounters(payload.counters || defaultCounters);
+          currentData = { deviceId: payload.deviceId, state: payload.state || defaultState, counters: payload.counters || defaultCounters };
         }
+      } else {
+        // Web Browser Fallback
+        let webDeviceId = localStorage.getItem('web_device_id');
+        if (!webDeviceId) {
+          webDeviceId = 'web-browser-' + Math.random().toString(36).substring(2, 12);
+          localStorage.setItem('web_device_id', webDeviceId);
+        }
+        currentData.deviceId = webDeviceId;
+        
+        const storedState = localStorage.getItem('web_license_state');
+        if (storedState) currentData.state = JSON.parse(storedState);
+        
+        const storedCounters = localStorage.getItem('web_demo_counters');
+        if (storedCounters) currentData.counters = JSON.parse(storedCounters);
       }
+      setDeviceId(currentData.deviceId);
+      setState(currentData.state);
+      setCounters(currentData.counters);
     } catch (err) {
       console.error("Failed to load license state", err);
     } finally {
       setIsReady(true);
     }
+    return currentData;
   };
 
   useEffect(() => {
-    refreshLicenseState();
+    const startup = async () => {
+      const data = await refreshLicenseState();
+      
+      // Perform silent background sync if we have an active license token
+      if (data.state.mode === 'licensed_active' && data.state.entitlement_token && data.deviceId) {
+        try {
+          const res = await fetch('http://localhost:4000/api/license/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              entitlementToken: data.state.entitlement_token,
+              deviceId: data.deviceId,
+              appVersion: '1.0.0'
+            })
+          });
+          const serverData = await res.json();
+          // If server explicitly revokes it
+          if (!serverData.success && (serverData.status === 'license_revoked' || serverData.status === 'license_invalid')) {
+            console.warn('License was revoked centrally. Downgrading to Demo Mode.');
+            await enterDemoMode();
+          } else if (serverData.success && serverData.entitlementToken) {
+            // Update local token successfully
+            if (window.electron?.ipcRenderer) {
+              await window.electron.ipcRenderer.invoke('license:refresh-verification', {
+                entitlementToken: serverData.entitlementToken,
+                offlineGraceDays: serverData.offlineGraceDays || 30,
+                reverifyAfterHours: serverData.reverifyAfterHours || 72
+              });
+              await refreshLicenseState();
+            } else {
+              const newState = { 
+                ...data.state, 
+                entitlement_token: serverData.entitlementToken, 
+                last_verified_at: new Date().toISOString() 
+              };
+              localStorage.setItem('web_license_state', JSON.stringify(newState));
+              setState(newState);
+            }
+          }
+        } catch (e) {
+          console.log('Silent sync skipped: Working offline or server unreachable.');
+        }
+      }
+    };
+    startup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activateLicense = async (activationData: any) => {
@@ -83,7 +145,25 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return res;
     }
-    return { success: false, error: 'IPC not available' };
+
+    // Web Browser Fallback
+    const newState = {
+      ...state,
+      mode: 'licensed_active' as const,
+      license_id: activationData.licenseId,
+      customer_name: activationData.licensedToName,
+      organization: activationData.licensedToOrganization,
+      tier: activationData.tier,
+      activation_date: activationData.activationDate,
+      last_verified_at: new Date().toISOString(),
+      offline_grace_days: activationData.offlineGraceDays,
+      reverify_after_hours: activationData.reverifyAfterHours,
+      entitlement_token: activationData.entitlementToken
+    };
+    localStorage.setItem('web_license_state', JSON.stringify(newState));
+    setState(newState);
+    window.dispatchEvent(new CustomEvent('LICENSE_ACTIVATED'));
+    return { success: true };
   };
 
   const enterDemoMode = async () => {
@@ -91,14 +171,29 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await window.electron.ipcRenderer.invoke('license:enter-demo');
       await refreshLicenseState();
       window.dispatchEvent(new CustomEvent('DEMO_STARTED'));
+      return;
     }
+
+    // Web Browser Fallback
+    const newState = { ...defaultState };
+    localStorage.setItem('web_license_state', JSON.stringify(newState));
+    setState(newState);
+    window.dispatchEvent(new CustomEvent('DEMO_STARTED'));
   };
 
   const trackUsage = async (key: string, amount = 1) => {
     if (window.electron?.ipcRenderer) {
       const newCount = await window.electron.ipcRenderer.invoke('license:track-usage', { key, amount });
       setCounters(prev => ({ ...prev, [key]: newCount }));
+      return;
     }
+
+    // Web Browser Fallback
+    setCounters(prev => {
+      const next = { ...prev, [key]: (prev[key as keyof DemoUsageCounters] || 0) + amount };
+      localStorage.setItem('web_demo_counters', JSON.stringify(next));
+      return next;
+    });
   };
 
   const entitlements = EntitlementEngine.getEntitlements(state, counters, DEFAULT_DEMO_POLICY);

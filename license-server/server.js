@@ -39,6 +39,14 @@ const createEntitlementToken = (license, policy, activationId) => {
 // ACTIVATE LICENSE
 app.post('/api/license/activate', async (req, res) => {
   const { licenseKey, deviceId, platform, appVersion } = req.body;
+
+  // Input validation — prevent null deviceId from crashing on NOT NULL constraint
+  if (!licenseKey || !licenseKey.trim()) {
+    return res.status(400).json({ success: false, status: 'validation_error', message: 'License key is required.' });
+  }
+  if (!deviceId || !deviceId.trim()) {
+    return res.status(400).json({ success: false, status: 'validation_error', message: 'Device ID is required. Please restart the application and try again.' });
+  }
   
   try {
     const license = await db.get('SELECT * FROM licenses WHERE license_key = ?', [licenseKey]);
@@ -112,8 +120,9 @@ app.post('/api/license/activate', async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Internal server error.' });
+    console.error('ACTIVATION ERROR:', err.message, err.stack);
+    console.error('Request body was:', JSON.stringify(req.body));
+    res.status(500).json({ success: false, message: 'Internal server error: ' + err.message });
   }
 });
 

@@ -68,6 +68,10 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
 
   const handleActivate = async () => {
     if (!key.trim()) return;
+    if (!deviceId) {
+      setError('Device ID not ready. Please close this screen and try again in a moment.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -76,7 +80,7 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           licenseKey: key.trim(),
-          deviceId: deviceId, // We got this from the App's local DB via IPC Context
+          deviceId: deviceId,
           appVersion: '1.0.0',
           platform: window.navigator.platform
         })
@@ -86,9 +90,10 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
         await activateLicense(data);
         onSuccess();
       } else {
-        setError(data.message || 'Verification failed. ' + data.status);
+        setError(data.message || 'Verification failed. Status: ' + data.status);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Activation network error:', err);
       setError('Could not connect to the activation server. Please check your internet connection.');
     } finally {
       setLoading(false);
