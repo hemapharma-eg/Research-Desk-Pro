@@ -190,6 +190,27 @@ export interface ElectronAPI {
   exportTbCSV: (csvContent: string, defaultName?: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
   exportTbImage: (imageDataUrl: string, defaultName?: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
   importTbCSV: () => Promise<{ success: boolean; data?: { content: string; fileName: string; filePath: string }; canceled?: boolean; error?: string }>;
+
+  // Integrity Checker
+  getIcScanSessions: (documentId?: string) => Promise<{ success: boolean; data?: IcScanSessionRow[]; error?: string }>;
+  createIcScanSession: (data: Partial<IcScanSessionRow>) => Promise<{ success: boolean; data?: IcScanSessionRow; error?: string }>;
+  updateIcScanSession: (id: string, updates: Partial<IcScanSessionRow>) => Promise<{ success: boolean; data?: IcScanSessionRow; error?: string }>;
+  deleteIcScanSession: (id: string) => Promise<{ success: boolean; error?: string }>;
+  getIcFindings: (sessionId: string) => Promise<{ success: boolean; data?: IcFindingRow[]; error?: string }>;
+  saveIcFindings: (findings: Partial<IcFindingRow>[]) => Promise<{ success: boolean; error?: string }>;
+  updateIcFindingStatus: (id: string, status: string, reviewerNote?: string | null) => Promise<{ success: boolean; data?: IcFindingRow; error?: string }>;
+  getIcSettings: (profileName?: string) => Promise<{ success: boolean; data?: string; error?: string }>;
+  updateIcSettings: (profileName: string, settingsJson: string) => Promise<{ success: boolean; error?: string }>;
+  getIcAbbrevRegistry: (sessionId: string) => Promise<{ success: boolean; data?: IcAbbrevRow[]; error?: string }>;
+  saveIcAbbrevRegistry: (items: Partial<IcAbbrevRow>[]) => Promise<{ success: boolean; error?: string }>;
+  getIcCitationMapping: (sessionId: string) => Promise<{ success: boolean; data?: IcCitationMappingRow[]; error?: string }>;
+  saveIcCitationMapping: (items: Partial<IcCitationMappingRow>[]) => Promise<{ success: boolean; error?: string }>;
+  getIcAssetMapping: (sessionId: string) => Promise<{ success: boolean; data?: IcAssetMappingRow[]; error?: string }>;
+  saveIcAssetMapping: (items: Partial<IcAssetMappingRow>[]) => Promise<{ success: boolean; error?: string }>;
+  getIcComplianceStatements: (sessionId: string) => Promise<{ success: boolean; data?: IcComplianceStatementRow[]; error?: string }>;
+  saveIcComplianceStatements: (items: Partial<IcComplianceStatementRow>[]) => Promise<{ success: boolean; error?: string }>;
+  getIcSampleSizeMentions: (sessionId: string) => Promise<{ success: boolean; data?: IcSampleSizeRow[]; error?: string }>;
+  saveIcSampleSizeMentions: (items: Partial<IcSampleSizeRow>[]) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Graphing Studio DB Row Types
@@ -334,9 +355,97 @@ export interface TbExportRow {
   exported_at: string;
 }
 
+// Integrity Checker DB Row Types
+export interface IcScanSessionRow {
+  id: string;
+  document_id: string;
+  scan_scope: string;
+  total_findings: number;
+  errors_count: number;
+  warnings_count: number;
+  notices_count: number;
+  overall_score: number;
+  settings_snapshot_json: string;
+  created_at: string;
+}
+
+export interface IcFindingRow {
+  id: string;
+  session_id: string;
+  category: string;
+  check_name: string;
+  severity: 'error' | 'warning' | 'notice' | 'pass';
+  confidence: 'high' | 'medium' | 'low';
+  status: 'unresolved' | 'resolved' | 'ignored' | 'false_positive';
+  summary: string;
+  description: string | null;
+  recommendation: string | null;
+  document_section: string | null;
+  location_anchor: string | null;
+  related_asset_id: string | null;
+  extracted_evidence: string | null;
+  reviewer_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface IcAbbrevRow {
+  id: string;
+  session_id: string;
+  abbreviation: string;
+  expansion: string | null;
+  first_definition_location: string | null;
+  first_use_location: string | null;
+  usage_count: number;
+  issue_flag: string | null;
+}
+
+export interface IcCitationMappingRow {
+  id: string;
+  session_id: string;
+  citation_string: string;
+  document_location: string | null;
+  matched_reference_id: string | null;
+  matched_status: string;
+  issue_flag: string | null;
+}
+
+export interface IcAssetMappingRow {
+  id: string;
+  session_id: string;
+  item_type: string;
+  label_number: string | null;
+  caption_text: string | null;
+  asset_id: string | null;
+  in_text_mentions_count: number;
+  numbering_status: string;
+  issue_flag: string | null;
+}
+
+export interface IcSampleSizeRow {
+  id: string;
+  session_id: string;
+  detected_text: string;
+  numeric_value: number | null;
+  role_classification: string;
+  section: string | null;
+  sentence_excerpt: string | null;
+  consistency_group_id: string | null;
+  issue_flag: string | null;
+}
+
+export interface IcComplianceStatementRow {
+  id: string;
+  session_id: string;
+  statement_type: string;
+  detected_status: string;
+  location: string | null;
+  extracted_text: string | null;
+  applicability_status: string;
+}
+
 declare global {
   interface Window {
     api: ElectronAPI;
   }
 }
-

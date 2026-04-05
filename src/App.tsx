@@ -7,6 +7,7 @@ import { GraphingStudio } from './modules/graphing-studio/GraphingStudio';
 import { PowerAnalysis } from './modules/power-analysis/PowerAnalysis';
 import { SystematicReviewStudio } from './modules/systematic-review/SystematicReviewStudio';
 import { TableBuilder } from './modules/table-builder/TableBuilder';
+import { IntegrityCheckerHome } from './modules/integrity-checker/IntegrityCheckerHome';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 
 function AppContent() {
@@ -56,6 +57,8 @@ function AppContent() {
         return <SystematicReviewStudio />;
       case 'table-builder':
         return <TableBuilder />;
+      case 'integrity-checker':
+        return <IntegrityCheckerHome />;
       default:
         return (
           <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-lg)' }}>
@@ -83,7 +86,7 @@ function AppContent() {
           </div>
           
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-            {['Dashboard', 'Reference Manager', 'Document Editor', 'Graphing Studio', 'Power Analysis', 'Systematic Review', 'Table Builder'].map((item) => {
+            {['Dashboard', 'Reference Manager', 'Document Editor', 'Graphing Studio', 'Power Analysis', 'Systematic Review', 'Table Builder', 'Integrity Checker'].map((item) => {
               const id = item.toLowerCase().replace(' ', '-');
               const isActive = activeModule === id;
               return (

@@ -71,7 +71,7 @@ export function DocumentSidebar({ editor }: DocumentSidebarProps) {
           Add headings to your document to see the outline here.
         </p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', flex: 1, overflowY: 'auto' }}>
           {outline.map((item) => (
             <button
               key={item.id}
@@ -100,6 +100,18 @@ export function DocumentSidebar({ editor }: DocumentSidebarProps) {
           ))}
         </div>
       )}
+
+      <div style={{ marginTop: 'auto', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <h4 style={{ fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.5px' }}>Document Tools</h4>
+        <button 
+          className="btn btn-secondary" 
+          style={{ width: '100%', justifyContent: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-sm)' }}
+          onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-module', { detail: { module: 'integrity-checker' } }))}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Run Integrity Scan
+        </button>
+      </div>
     </div>
   );
 }
