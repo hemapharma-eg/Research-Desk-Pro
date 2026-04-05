@@ -74,16 +74,26 @@
   },
   "main": "dist-electron/main/index.js",
   "build": {
-    "appId": "com.hemapharmaeg.researchdesk",
-    "productName": "Research Desk",
+    "appId": "com.hemapharmaeg.researchdeskpro",
+    "productName": "Research Desk Pro",
     "directories": {
       "output": "release"
     },
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "target": ["dmg"],
+      "icon": "build/icon.icns"
     },
     "win": {
-      "target": "nsis"
+      "target": ["nsis"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   }
 }

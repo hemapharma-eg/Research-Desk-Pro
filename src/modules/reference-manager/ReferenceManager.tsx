@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import type { Reference, Folder } from '../../types/electron.d';
 import { AddReferenceModal } from './components/AddReferenceModal';
+import { useLicense } from '../licensing/LicenseContext';
+import { DemoLimitDialog } from '../licensing/components/DemoLimitDialog';
 
 // === HELPER STYLES ===
 const styles = {
@@ -41,6 +43,8 @@ const styles = {
 
 export function ReferenceManager() {
   const { currentProject, projectLoadTime } = useProject();
+  const { entitlements } = useLicense();
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
   
   // Data State
   const [references, setReferences] = useState<Reference[]>([]);
@@ -110,6 +114,11 @@ export function ReferenceManager() {
   // --- ACTIONS ---
   
   const handleImport = async () => {
+    if (references.length >= entitlements.maxReferenceLibrarySize) {
+      setShowLimitDialog(true);
+      return;
+    }
+
     // Optional explicit check:
     // If no folder is selected, maybe we warn them. But letting it import globally is fine!
     try {
@@ -163,6 +172,10 @@ export function ReferenceManager() {
   };
 
   const handleCreateNewRefModal = () => {
+    if (references.length >= entitlements.maxReferenceLibrarySize) {
+      setShowLimitDialog(true);
+      return;
+    }
     setShowAddModal(true);
   };
 
@@ -717,6 +730,13 @@ export function ReferenceManager() {
         />
       )}
 
+      <DemoLimitDialog
+        isOpen={showLimitDialog}
+        onClose={() => setShowLimitDialog(false)}
+        title="Library Limit Reached"
+        message={`You have reached the maximum Reference Library size of ${entitlements.maxReferenceLibrarySize} items in the Demo Version.`}
+        onActivate={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
+      />
     </div>
   );
 }

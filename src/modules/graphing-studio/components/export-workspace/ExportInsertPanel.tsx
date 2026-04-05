@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { RefObject } from 'react';
 import html2canvas from 'html2canvas';
+import { useLicense } from '../../../../modules/licensing/LicenseContext';
+import { DemoLimitDialog } from '../../../../modules/licensing/components/DemoLimitDialog';
 
 interface ExportInsertPanelProps {
   chartRef: RefObject<HTMLDivElement | null>;
@@ -77,12 +79,24 @@ function changeDpiDataUrl(base64Image: string, dpi: number): string {
 }
 
 export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelProps) {
+  const { entitlements, trackUsage } = useLicense();
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
+  
   const [showSettings, setShowSettings] = useState<'png' | 'tiff' | null>(null);
   const [dpi, setDpi] = useState<number>(300);
   const [targetWidth, setTargetWidth] = useState<number>(89); 
   const [targetUnit, setTargetUnit] = useState<'mm' | 'px'>('mm');
 
   const executeRasterExport = async (format: 'png' | 'tiff') => {
+    if (!entitlements.canExportWithoutWatermark && format === 'tiff') {
+      setShowLimitDialog(true);
+      return;
+    }
+    
+    if (!entitlements.canExportWithoutWatermark && dpi > 150) {
+      setShowLimitDialog(true);
+      return;
+    }
     if (!chartRef.current) return;
     try {
       // Compute the exact pixels needed
@@ -98,6 +112,7 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
       const finalDataUrl = changeDpiDataUrl(rawDataUrl, dpi);
 
       await window.api.exportGraphingFigure(finalDataUrl, datasetName || 'Figure', format);
+      trackUsage('graphs_exported');
       setShowSettings(null);
     } catch (err) {
       console.error(`Export ${format} failed`, err);
@@ -108,6 +123,11 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
   const handleExportTiff = () => setShowSettings('tiff');
 
   const handleExportSvg = async () => {
+    if (!entitlements.canUseAdvancedExports) {
+      setShowLimitDialog(true);
+      return;
+    }
+
     if (!chartRef.current) return;
     const svgEl = chartRef.current.querySelector('svg');
     if (!svgEl) { alert('No SVG found in current graph.'); return; }
@@ -118,6 +138,7 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
     reader.onload = async () => {
       if (typeof reader.result === 'string') {
         await window.api.exportGraphingFigure(reader.result, datasetName || 'Figure', 'svg');
+        trackUsage('graphs_exported');
       }
     };
     reader.readAsDataURL(blob);
@@ -265,6 +286,14 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
           ))}
         </div>
       </div>
+
+      <DemoLimitDialog
+        isOpen={showLimitDialog}
+        onClose={() => setShowLimitDialog(false)}
+        title="Premium Feature"
+        message="High-resolution exports (>150 DPI), TIFF formats, and SVG vector exports are only available in the licensed version."
+        onActivate={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
+      />
     </div>
   );
 }

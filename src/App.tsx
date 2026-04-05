@@ -9,6 +9,10 @@ import { SystematicReviewStudio } from './modules/systematic-review/SystematicRe
 import { TableBuilder } from './modules/table-builder/TableBuilder';
 import { IntegrityCheckerHome } from './modules/integrity-checker/IntegrityCheckerHome';
 import { ProjectProvider, useProject } from './context/ProjectContext';
+import { LicenseProvider } from './modules/licensing/LicenseContext';
+import { AppAccessController } from './modules/licensing/screens/AppAccessController';
+import { DemoBanner } from './modules/licensing/components/DemoBanner';
+import { StatusWidget } from './modules/licensing/components/StatusWidget';
 
 function AppContent() {
   const [activeModule, setActiveModule] = useState('dashboard');
@@ -121,14 +125,16 @@ function AppContent() {
         {/* Main Content Area */}
         <main className="main-content no-drag-region" style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <header className="print-hidden" style={{ marginBottom: 'var(--space-5)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}>
                   {activeModule.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                 </h1>
                 <p style={{ marginTop: 'var(--space-1)', color: 'var(--color-text-secondary)' }}>Welcome to your workspace.</p>
               </div>
+              <StatusWidget />
             </div>
+            <DemoBanner />
           </header>
           
           <div className="module-content" style={{ 
@@ -150,9 +156,13 @@ function AppContent() {
 
 function App() {
   return (
-    <ProjectProvider>
-      <AppContent />
-    </ProjectProvider>
+    <LicenseProvider>
+      <ProjectProvider>
+        <AppAccessController>
+          <AppContent />
+        </AppAccessController>
+      </ProjectProvider>
+    </LicenseProvider>
   );
 }
 

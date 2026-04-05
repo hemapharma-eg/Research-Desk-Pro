@@ -45,6 +45,8 @@ import { PaginationPanel } from './components/PaginationPanel';
 import { CitationPreferences } from './components/CitationPreferences';
 import { InsertFigureModal } from './components/InsertFigureModal';
 import { AcademicTemplates } from './templates';
+import { useLicense } from '../licensing/LicenseContext';
+import { DemoLimitDialog } from '../licensing/components/DemoLimitDialog';
 import './TipTapStyles.css';
 
 interface TipTapEditorProps {
@@ -68,6 +70,9 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
   const [isTracking, setIsTracking] = useState(false);
   const [noteText, setNoteText] = useState('');
   
+  const { entitlements, trackUsage } = useLicense();
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
+
   const [pageSettings, setPageSettings] = useState({
     headerText: '',
     footerText: '',
@@ -309,10 +314,18 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
   const handleExportDocx = async () => {
     if (!editor) return;
     try {
-      const result = await window.api.exportDocx(editor.getHTML(), documentTitle || 'Document');
+      let exportHtml = editor.getHTML();
+      if (!entitlements.canExportWithoutWatermark) {
+        exportHtml += '<br/><hr/><p style="color: gray; text-align: center;"><i>Created with Research Desk Pro (Demo Version)</i></p>';
+      }
+
+      const result = await window.api.exportDocx(exportHtml, documentTitle || 'Document');
+      trackUsage('documents_exported');
       
       if (result && result.success) {
-        // Successfully saved quietly, or we can alert
+        if (!entitlements.canExportWithoutWatermark) {
+          setShowLimitDialog(true);
+        }
       } else if (result && !result.canceled) {
         alert('Failed to export DOCX: ' + result.error);
       }
@@ -944,6 +957,14 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         <span>{editor.storage.characterCount.words()} words</span>
         <span>{editor.storage.characterCount.characters()} characters</span>
       </div>
+      
+      <DemoLimitDialog
+        isOpen={showLimitDialog}
+        onClose={() => setShowLimitDialog(false)}
+        title="Document Exported (Demo Mode)"
+        message="A watermark has been added to your exported document because you are using the Demo Version. To remove the watermark, please activate your license."
+        onActivate={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
+      />
     </div>
   );
 }

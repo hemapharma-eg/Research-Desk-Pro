@@ -221,6 +221,107 @@ function initDatabase(projectPath) {
         exported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (table_id) REFERENCES tb_tables(id) ON DELETE CASCADE
       );
+
+      -- ═══ Research Integrity & Compliance Checker ═══
+      CREATE TABLE IF NOT EXISTS ic_scan_sessions (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        scan_scope TEXT DEFAULT 'full',
+        total_findings INTEGER DEFAULT 0,
+        errors_count INTEGER DEFAULT 0,
+        warnings_count INTEGER DEFAULT 0,
+        notices_count INTEGER DEFAULT 0,
+        overall_score INTEGER DEFAULT 100,
+        settings_snapshot_json TEXT DEFAULT '{}',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_findings (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        check_name TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        confidence TEXT DEFAULT 'high',
+        status TEXT DEFAULT 'unresolved',
+        summary TEXT NOT NULL,
+        description TEXT,
+        recommendation TEXT,
+        document_section TEXT,
+        location_anchor TEXT,
+        related_asset_id TEXT,
+        extracted_evidence TEXT,
+        reviewer_note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        resolved_at DATETIME,
+        FOREIGN KEY (session_id) REFERENCES ic_scan_sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_abbrev_registry (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        abbreviation TEXT NOT NULL,
+        expansion TEXT,
+        first_definition_location TEXT,
+        first_use_location TEXT,
+        usage_count INTEGER DEFAULT 0,
+        issue_flag TEXT,
+        FOREIGN KEY (session_id) REFERENCES ic_scan_sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_citation_mapping (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        citation_string TEXT,
+        document_location TEXT,
+        matched_reference_id TEXT,
+        matched_status TEXT,
+        issue_flag TEXT,
+        FOREIGN KEY (session_id) REFERENCES ic_scan_sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_table_figure_mapping (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        label_number TEXT,
+        caption_text TEXT,
+        asset_id TEXT,
+        in_text_mentions_count INTEGER DEFAULT 0,
+        numbering_status TEXT,
+        issue_flag TEXT,
+        FOREIGN KEY (session_id) REFERENCES ic_scan_sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_sample_size_mentions (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        detected_text TEXT,
+        numeric_value REAL,
+        role_classification TEXT,
+        section TEXT,
+        sentence_excerpt TEXT,
+        consistency_group_id TEXT,
+        issue_flag TEXT,
+        FOREIGN KEY (session_id) REFERENCES ic_scan_sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_compliance_statements (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        statement_type TEXT NOT NULL,
+        detected_status TEXT DEFAULT 'not detected',
+        location TEXT,
+        extracted_text TEXT,
+        applicability_status TEXT DEFAULT 'applicable',
+        FOREIGN KEY (session_id) REFERENCES ic_scan_sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ic_settings (
+        profile_name TEXT PRIMARY KEY,
+        settings_json TEXT DEFAULT '{}',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Migration: Ensure new columns exist for older projects
@@ -875,6 +976,158 @@ function updateTbSettings(settingsJson) {
   return { success: true };
 }
 
+// === INTEGRITY CHECKER ===
+function getIcScanSessions(documentId) {
+  const dbInst = getDb();
+  if (documentId) return dbInst.prepare(`SELECT * FROM ic_scan_sessions WHERE document_id = ? ORDER BY created_at DESC`).all(documentId);
+  return dbInst.prepare(`SELECT * FROM ic_scan_sessions ORDER BY created_at DESC`).all();
+}
+
+function createIcScanSession(data) {
+  const dbInst = getDb();
+  const id = data.id || crypto.randomUUID();
+  dbInst.prepare(`
+    INSERT INTO ic_scan_sessions (id, document_id, scan_scope, total_findings, errors_count, warnings_count, notices_count, overall_score, settings_snapshot_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.document_id, data.scan_scope || 'full', 
+        data.total_findings || 0, data.errors_count || 0, data.warnings_count || 0, data.notices_count || 0,
+        data.overall_score || 100, data.settings_snapshot_json || '{}');
+  return dbInst.prepare(`SELECT * FROM ic_scan_sessions WHERE id = ?`).get(id);
+}
+
+function updateIcScanSession(id, updates) {
+  const dbInst = getDb();
+  const current = dbInst.prepare(`SELECT * FROM ic_scan_sessions WHERE id = ?`).get(id);
+  if (!current) throw new Error('Session not found');
+  dbInst.prepare(`
+    UPDATE ic_scan_sessions SET total_findings=?, errors_count=?, warnings_count=?, notices_count=?, overall_score=? WHERE id=?
+  `).run(
+    updates.total_findings !== undefined ? updates.total_findings : current.total_findings,
+    updates.errors_count !== undefined ? updates.errors_count : current.errors_count,
+    updates.warnings_count !== undefined ? updates.warnings_count : current.warnings_count,
+    updates.notices_count !== undefined ? updates.notices_count : current.notices_count,
+    updates.overall_score !== undefined ? updates.overall_score : current.overall_score,
+    id
+  );
+  return dbInst.prepare(`SELECT * FROM ic_scan_sessions WHERE id = ?`).get(id);
+}
+
+function deleteIcScanSession(id) {
+  const dbInst = getDb();
+  dbInst.prepare(`DELETE FROM ic_scan_sessions WHERE id = ?`).run(id);
+  return { success: true };
+}
+
+function getIcFindings(sessionId) {
+  const dbInst = getDb();
+  return dbInst.prepare(`SELECT * FROM ic_findings WHERE session_id = ? ORDER BY severity ASC`).all(sessionId);
+}
+
+function saveIcFindings(findings) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction((items) => {
+    const stmt = dbInst.prepare(`
+      INSERT INTO ic_findings (id, session_id, category, check_name, severity, confidence, status, summary, description, recommendation, document_section, location_anchor, related_asset_id, extracted_evidence, reviewer_note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const data of items) {
+       stmt.run(data.id || crypto.randomUUID(), data.session_id, data.category, data.check_name, data.severity, 
+         data.confidence || 'high', data.status || 'unresolved', data.summary, 
+         data.description || null, data.recommendation || null, data.document_section || null, 
+         data.location_anchor || null, data.related_asset_id || null, data.extracted_evidence || null, data.reviewer_note || null);
+    }
+  });
+  tx(findings);
+  return { success: true };
+}
+
+function updateIcFindingStatus(id, status, reviewerNote = null) {
+  const dbInst = getDb();
+  if (reviewerNote !== null) {
+    dbInst.prepare(`UPDATE ic_findings SET status = ?, reviewer_note = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?`).run(status, reviewerNote, id);
+  } else {
+    dbInst.prepare(`UPDATE ic_findings SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?`).run(status, id);
+  }
+  return dbInst.prepare(`SELECT * FROM ic_findings WHERE id = ?`).get(id);
+}
+
+function getIcSettings(profileName) {
+  const dbInst = getDb();
+  const row = dbInst.prepare(`SELECT settings_json FROM ic_settings WHERE profile_name = ?`).get(profileName || 'default');
+  return row ? row.settings_json : '{}';
+}
+
+function updateIcSettings(profileName, settingsJson) {
+  const dbInst = getDb();
+  dbInst.prepare(`INSERT OR REPLACE INTO ic_settings (profile_name, settings_json, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`).run(profileName || 'default', settingsJson);
+  return { success: true };
+}
+
+function getIcAbbrevRegistry(sessionId) {
+  return getDb().prepare(`SELECT * FROM ic_abbrev_registry WHERE session_id = ?`).all(sessionId);
+}
+function saveIcAbbrevRegistry(items) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction((list) => {
+    const stmt = dbInst.prepare(`INSERT INTO ic_abbrev_registry (id, session_id, abbreviation, expansion, first_definition_location, first_use_location, usage_count, issue_flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (const d of list) stmt.run(d.id || crypto.randomUUID(), d.session_id, d.abbreviation, d.expansion, d.first_definition_location, d.first_use_location, d.usage_count, d.issue_flag);
+  });
+  tx(items);
+  return {success:true};
+}
+
+function getIcCitationMapping(sessionId) {
+  return getDb().prepare(`SELECT * FROM ic_citation_mapping WHERE session_id = ?`).all(sessionId);
+}
+function saveIcCitationMapping(items) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction((list) => {
+    const stmt = dbInst.prepare(`INSERT INTO ic_citation_mapping (id, session_id, citation_string, document_location, matched_reference_id, matched_status, issue_flag) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    for (const d of list) stmt.run(d.id || crypto.randomUUID(), d.session_id, d.citation_string, d.document_location, d.matched_reference_id, d.matched_status, d.issue_flag);
+  });
+  tx(items);
+  return {success:true};
+}
+
+function getIcAssetMapping(sessionId) {
+  return getDb().prepare(`SELECT * FROM ic_table_figure_mapping WHERE session_id = ?`).all(sessionId);
+}
+function saveIcAssetMapping(items) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction((list) => {
+    const stmt = dbInst.prepare(`INSERT INTO ic_table_figure_mapping (id, session_id, item_type, label_number, caption_text, asset_id, in_text_mentions_count, numbering_status, issue_flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (const d of list) stmt.run(d.id || crypto.randomUUID(), d.session_id, d.item_type, d.label_number, d.caption_text, d.asset_id, d.in_text_mentions_count, d.numbering_status, d.issue_flag);
+  });
+  tx(items);
+  return {success:true};
+}
+
+function getIcComplianceStatements(sessionId) {
+  return getDb().prepare(`SELECT * FROM ic_compliance_statements WHERE session_id = ?`).all(sessionId);
+}
+function saveIcComplianceStatements(items) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction((list) => {
+    const stmt = dbInst.prepare(`INSERT INTO ic_compliance_statements (id, session_id, statement_type, detected_status, location, extracted_text, applicability_status) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    for (const d of list) stmt.run(d.id || crypto.randomUUID(), d.session_id, d.statement_type, d.detected_status, d.location, d.extracted_text, d.applicability_status);
+  });
+  tx(items);
+  return {success:true};
+}
+
+function getIcSampleSizeMentions(sessionId) {
+  return getDb().prepare(`SELECT * FROM ic_sample_size_mentions WHERE session_id = ?`).all(sessionId);
+}
+function saveIcSampleSizeMentions(items) {
+  const dbInst = getDb();
+  const tx = dbInst.transaction((list) => {
+    const stmt = dbInst.prepare(`INSERT INTO ic_sample_size_mentions (id, session_id, detected_text, numeric_value, role_classification, section, sentence_excerpt, consistency_group_id, issue_flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (const d of list) stmt.run(d.id || crypto.randomUUID(), d.session_id, d.detected_text, d.numeric_value, d.role_classification, d.section, d.sentence_excerpt, d.consistency_group_id, d.issue_flag);
+  });
+  tx(items);
+  return {success:true};
+}
+
 module.exports = {
 
   initDatabase,
@@ -956,4 +1209,25 @@ module.exports = {
   createTbExportEntry,
   getTbSettings,
   updateTbSettings,
+
+  // Integrity Checker
+  getIcScanSessions,
+  createIcScanSession,
+  updateIcScanSession,
+  deleteIcScanSession,
+  getIcFindings,
+  saveIcFindings,
+  updateIcFindingStatus,
+  getIcSettings,
+  updateIcSettings,
+  getIcAbbrevRegistry,
+  saveIcAbbrevRegistry,
+  getIcCitationMapping,
+  saveIcCitationMapping,
+  getIcAssetMapping,
+  saveIcAssetMapping,
+  getIcComplianceStatements,
+  saveIcComplianceStatements,
+  getIcSampleSizeMentions,
+  saveIcSampleSizeMentions,
 };

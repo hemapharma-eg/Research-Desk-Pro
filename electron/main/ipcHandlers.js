@@ -3,6 +3,7 @@ const ipcMain = electron.ipcMain;
 const dialog = electron.dialog;
 const dbManager = require('./db.js');
 const utils = require('./utils.js');
+const LicenseStorageService = require('./LicenseStorageService.js');
 
 ipcMain.handle('dialog:openDirectory', async (event) => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -11,6 +12,67 @@ ipcMain.handle('dialog:openDirectory', async (event) => {
   if (canceled) { return null; }
   return filePaths[0];
 });
+
+// ==========================================
+// LICENSE & ACTIVATION HANDLERS
+// ==========================================
+
+ipcMain.handle('license:get-state', () => {
+  return LicenseStorageService.getCombinedState();
+});
+
+ipcMain.handle('license:save-activation', (event, activationData) => {
+  try {
+    LicenseStorageService.updateLicenseState({
+      mode: 'licensed_active',
+      license_id: activationData.licenseId,
+      customer_name: activationData.licensedToName,
+      organization: activationData.licensedToOrganization,
+      tier: activationData.tier,
+      activation_date: activationData.activationDate,
+      last_verified_at: new Date().toISOString(),
+      offline_grace_days: activationData.offlineGraceDays,
+      reverify_after_hours: activationData.reverifyAfterHours,
+      entitlement_token: activationData.entitlementToken
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to save activation state:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:refresh-verification', (event, refreshData) => {
+  try {
+    LicenseStorageService.updateLicenseState({
+      last_verified_at: new Date().toISOString(),
+      entitlement_token: refreshData.entitlementToken,
+      offline_grace_days: refreshData.offlineGraceDays,
+      reverify_after_hours: refreshData.reverifyAfterHours
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:enter-demo', () => {
+  try {
+    LicenseStorageService.updateLicenseState({
+      mode: 'demo',
+      license_id: null,
+      entitlement_token: null
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:track-usage', (event, { key, amount }) => {
+  return LicenseStorageService.incrementCounter(key, amount || 1);
+});
+
 
 const fs = require('node:fs');
 const path = require('node:path');

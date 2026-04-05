@@ -3,6 +3,7 @@ const ipcMain = electron.ipcMain;
 const dialog = electron.dialog;
 const dbManager = require('./db.js');
 const utils = require('./utils.js');
+const LicenseStorageService = require('./LicenseStorageService.js');
 
 ipcMain.handle('dialog:openDirectory', async (event) => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -11,6 +12,67 @@ ipcMain.handle('dialog:openDirectory', async (event) => {
   if (canceled) { return null; }
   return filePaths[0];
 });
+
+// ==========================================
+// LICENSE & ACTIVATION HANDLERS
+// ==========================================
+
+ipcMain.handle('license:get-state', () => {
+  return LicenseStorageService.getCombinedState();
+});
+
+ipcMain.handle('license:save-activation', (event, activationData) => {
+  try {
+    LicenseStorageService.updateLicenseState({
+      mode: 'licensed_active',
+      license_id: activationData.licenseId,
+      customer_name: activationData.licensedToName,
+      organization: activationData.licensedToOrganization,
+      tier: activationData.tier,
+      activation_date: activationData.activationDate,
+      last_verified_at: new Date().toISOString(),
+      offline_grace_days: activationData.offlineGraceDays,
+      reverify_after_hours: activationData.reverifyAfterHours,
+      entitlement_token: activationData.entitlementToken
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to save activation state:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:refresh-verification', (event, refreshData) => {
+  try {
+    LicenseStorageService.updateLicenseState({
+      last_verified_at: new Date().toISOString(),
+      entitlement_token: refreshData.entitlementToken,
+      offline_grace_days: refreshData.offlineGraceDays,
+      reverify_after_hours: refreshData.reverifyAfterHours
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:enter-demo', () => {
+  try {
+    LicenseStorageService.updateLicenseState({
+      mode: 'demo',
+      license_id: null,
+      entitlement_token: null
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:track-usage', (event, { key, amount }) => {
+  return LicenseStorageService.incrementCounter(key, amount || 1);
+});
+
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -484,6 +546,39 @@ ipcMain.handle('document:exportDocx', async (event, html, defaultTitle = 'Docume
     return { success: true, filePath };
   } catch (error) {
     console.error("Export DOCX Error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// --- Import DOCX (for Integrity Checker) ---
+ipcMain.handle('document:importDocx', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import DOCX Manuscript',
+      filters: [{ name: 'Word Document', extensions: ['docx'] }],
+      properties: ['openFile']
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const filePath = filePaths[0];
+    const mammoth = require('mammoth');
+    const result = await mammoth.convertToHtml({ path: filePath });
+    const fileName = path.basename(filePath, path.extname(filePath));
+
+    return {
+      success: true,
+      data: {
+        html: result.value,
+        fileName,
+        filePath,
+        warnings: result.messages.filter(m => m.type === 'warning').map(m => m.message)
+      }
+    };
+  } catch (error) {
+    console.error('Import DOCX Error:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1136,4 +1231,101 @@ ipcMain.handle('tableBuilder:importCSV', async () => {
     console.error('Import CSV Error:', error);
     return { success: false, error: error.message };
   }
+});
+
+// --- Integrity Checker Handlers ---
+
+ipcMain.handle('integrity:getScanSessions', async (event, documentId) => {
+  try { return { success: true, data: dbManager.getIcScanSessions(documentId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:createScanSession', async (event, data) => {
+  try { return { success: true, data: dbManager.createIcScanSession(data) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:updateScanSession', async (event, id, updates) => {
+  try { return { success: true, data: dbManager.updateIcScanSession(id, updates) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:deleteScanSession', async (event, id) => {
+  try { return { success: true, data: dbManager.deleteIcScanSession(id) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getFindings', async (event, sessionId) => {
+  try { return { success: true, data: dbManager.getIcFindings(sessionId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:saveFindings', async (event, findings) => {
+  try { return { success: true, data: dbManager.saveIcFindings(findings) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:updateFindingStatus', async (event, id, status, reviewerNote) => {
+  try { return { success: true, data: dbManager.updateIcFindingStatus(id, status, reviewerNote) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getSettings', async (event, profileName) => {
+  try { return { success: true, data: dbManager.getIcSettings(profileName) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:updateSettings', async (event, profileName, settingsJson) => {
+  try { return { success: true, data: dbManager.updateIcSettings(profileName, settingsJson) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getAbbrevRegistry', async (event, sessionId) => {
+  try { return { success: true, data: dbManager.getIcAbbrevRegistry(sessionId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:saveAbbrevRegistry', async (event, items) => {
+  try { return { success: true, data: dbManager.saveIcAbbrevRegistry(items) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getCitationMapping', async (event, sessionId) => {
+  try { return { success: true, data: dbManager.getIcCitationMapping(sessionId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:saveCitationMapping', async (event, items) => {
+  try { return { success: true, data: dbManager.saveIcCitationMapping(items) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getAssetMapping', async (event, sessionId) => {
+  try { return { success: true, data: dbManager.getIcAssetMapping(sessionId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:saveAssetMapping', async (event, items) => {
+  try { return { success: true, data: dbManager.saveIcAssetMapping(items) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getComplianceStatements', async (event, sessionId) => {
+  try { return { success: true, data: dbManager.getIcComplianceStatements(sessionId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:saveComplianceStatements', async (event, items) => {
+  try { return { success: true, data: dbManager.saveIcComplianceStatements(items) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:getSampleSizeMentions', async (event, sessionId) => {
+  try { return { success: true, data: dbManager.getIcSampleSizeMentions(sessionId) }; }
+  catch (e) { return { success: false, error: String(e) }; }
+});
+
+ipcMain.handle('integrity:saveSampleSizeMentions', async (event, items) => {
+  try { return { success: true, data: dbManager.saveIcSampleSizeMentions(items) }; }
+  catch (e) { return { success: false, error: String(e) }; }
 });

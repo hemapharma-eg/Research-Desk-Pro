@@ -5,9 +5,13 @@ import type { ReviewRecord } from '../../types/ReviewModels';
 import { Cite } from '@citation-js/core';
 import '@citation-js/plugin-ris';
 import '@citation-js/plugin-bibtex';
+import { useLicense } from '../../../licensing/LicenseContext';
+import { DemoLimitDialog } from '../../../licensing/components/DemoLimitDialog';
 
 export function ImportWorkspace() {
   const { state, dispatch, logEvent } = useSystematicReview();
+  const { entitlements } = useLicense();
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [sourceName, setSourceName] = useState('PubMed');
   const [format, setFormat] = useState<'RIS' | 'BibTeX' | 'CSV'>('RIS');
   const [rawText, setRawText] = useState('');
@@ -45,6 +49,11 @@ export function ImportWorkspace() {
 
       if (!records || records.length === 0) {
         alert('No valid records found or could not be parsed.');
+        return;
+      }
+      
+      if (state.records.length + records.length > entitlements.maxScreeningArticleCount) {
+        setShowLimitDialog(true);
         return;
       }
 
@@ -218,6 +227,14 @@ export function ImportWorkspace() {
           </tbody>
         </table>
       </div>
+
+      <DemoLimitDialog
+        isOpen={showLimitDialog}
+        onClose={() => setShowLimitDialog(false)}
+        title="Screening Capacity Exceeded"
+        message={`The Demo Version limits systematic reviews to ${entitlements.maxScreeningArticleCount} records in the screening queue. Activate your license for unlimited records.`}
+        onActivate={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
+      />
     </div>
   );
 }

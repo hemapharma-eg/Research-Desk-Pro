@@ -1,9 +1,19 @@
+import { useState } from 'react';
 import { useProject } from '../../context/ProjectContext';
+import { useLicense } from '../licensing/LicenseContext';
+import { DemoLimitDialog } from '../licensing/components/DemoLimitDialog';
 
 export function Dashboard() {
   const { currentProject, setCurrentProject, error, setError } = useProject();
+  const { entitlements, trackUsage } = useLicense();
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
 
   const handleCreateOrOpenProject = async () => {
+    if (!entitlements.canCreateProject) {
+      setShowLimitDialog(true);
+      return;
+    }
+
     try {
       setError(null);
       // 1. Open native folder selection dialog
@@ -18,6 +28,7 @@ export function Dashboard() {
       
       if (result.success) {
         setCurrentProject(result.path!);
+        trackUsage('projects_created');
       } else {
         setError(result.error || 'Unknown initialization error');
       }
@@ -88,6 +99,14 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      <DemoLimitDialog
+        isOpen={showLimitDialog}
+        onClose={() => setShowLimitDialog(false)}
+        title="Project Limit Reached"
+        message="You have reached the maximum number of projects allowed in the Demo Version."
+        onActivate={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
+      />
     </div>
   );
 }
