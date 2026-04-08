@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
     "build": "vite build && npm run copy:electron",
+    "postinstall": "electron-builder install-app-deps",
     "lint": "eslint .",
     "preview": "vite preview",
     "dev:vite": "vite",
