@@ -14,15 +14,18 @@ export const DemoBanner: React.FC = () => {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      backgroundColor: 'rgba(41, 98, 255, 0.05)', border: '1px solid var(--color-accent-primary)',
+      background: 'var(--gradient-accent-subtle)',
+      border: '1px solid rgba(99, 102, 241, 0.2)',
       padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)',
-      marginTop: 'var(--space-4)'
+      marginTop: 'var(--space-3)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <span style={{ 
-          backgroundColor: 'var(--color-accent-primary)', color: 'white', 
-          fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' 
-        }}>Demo Version</span>
+          background: 'var(--gradient-accent)', color: 'white', 
+          fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 8px',
+          borderRadius: 'var(--radius-full)', textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+        }}>Demo</span>
         <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
           Some limits apply. Upgrade for unlimited projects and full-resolution exports.
         </span>
@@ -30,9 +33,9 @@ export const DemoBanner: React.FC = () => {
       <div>
         <button 
           onClick={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
+          className="btn-primary"
           style={{ 
-            padding: '4px 12px', fontSize: 'var(--font-size-sm)', backgroundColor: 'var(--color-accent-primary)', 
-            color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 'var(--font-weight-medium)'
+            padding: '4px 14px', fontSize: 'var(--font-size-sm)',
           }}
         >
           Activate

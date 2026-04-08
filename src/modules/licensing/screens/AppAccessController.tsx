@@ -5,53 +5,84 @@ export const WelcomeScreen: React.FC<{ onContinueDemo: () => void, onActivate: (
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100vh', justifyContent: 'center', alignItems: 'center',
-      backgroundColor: 'var(--color-bg-app)', padding: 'var(--space-6)'
+      background: 'radial-gradient(ellipse at 50% 30%, rgba(99,102,241,0.15), transparent 60%), var(--color-bg-app)',
+      padding: 'var(--space-6)'
     }}>
       <div style={{
-        maxWidth: 600, width: '100%', backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-8)',
-        borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-xl)', border: '1px solid var(--color-border-light)'
+        maxWidth: 620, width: '100%', padding: 'var(--space-8)',
+        borderRadius: 'var(--radius-xl)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'var(--glass-blur)',
+        WebkitBackdropFilter: 'var(--glass-blur)',
+        border: '1px solid var(--glass-border)',
+        boxShadow: 'var(--shadow-xl), var(--shadow-glow)',
       }}>
+        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-          <h1 style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-text-primary)' }}>
-            Research Desk<span style={{ color: 'var(--color-accent-primary)' }}>.</span> Pro
+          <div style={{
+            width: 56, height: 56, borderRadius: 'var(--radius-lg)', margin: '0 auto var(--space-4)',
+            background: 'var(--gradient-accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'var(--shadow-glow-lg)',
+            fontSize: '24px', fontWeight: 'bold', color: 'white',
+          }}>R</div>
+          <h1 style={{
+            fontSize: 'var(--font-size-display)', fontWeight: 'var(--font-weight-bold)',
+            color: 'var(--color-text-primary)', letterSpacing: '-0.03em',
+          }}>
+            Reseonix
           </h1>
           <p style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-md)', color: 'var(--color-text-secondary)' }}>
-            The premium academic and research productivity platform.
+            Next-generation academic research platform.
           </p>
         </div>
 
+        {/* Plans comparison */}
         <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-          <div style={{ flex: 1, padding: 'var(--space-4)', backgroundColor: 'var(--color-bg-hover)', borderRadius: 'var(--radius-md)' }}>
-            <h3 style={{ fontWeight: 'var(--font-weight-semibold)', marginBottom: 'var(--space-2)' }}>Demo Version</h3>
+          <div style={{
+            flex: 1, padding: 'var(--space-4)',
+            backgroundColor: 'var(--color-bg-surface-raised)',
+            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)',
+          }}>
+            <h3 style={{ fontWeight: 'var(--font-weight-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-primary)' }}>Demo</h3>
             <ul style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', paddingLeft: 'var(--space-4)' }}>
-              <li>Limited projects and saves</li>
-              <li>Watermarks on exports</li>
-              <li>Preview-only graph resolutions</li>
+              <li style={{ marginBottom: '4px' }}>Limited projects & saves</li>
+              <li style={{ marginBottom: '4px' }}>Watermarks on exports</li>
+              <li>Preview-only resolutions</li>
             </ul>
           </div>
-          <div style={{ flex: 1, padding: 'var(--space-4)', backgroundColor: 'rgba(41, 98, 255, 0.05)', border: '1px solid var(--color-accent-primary)', borderRadius: 'var(--radius-md)' }}>
-            <h3 style={{ fontWeight: 'var(--font-weight-semibold)', marginBottom: 'var(--space-2)' }}>Full Version</h3>
+          <div style={{
+            flex: 1, padding: 'var(--space-4)',
+            background: 'var(--gradient-accent-subtle)',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            borderRadius: 'var(--radius-md)',
+          }}>
+            <h3 style={{ fontWeight: 'var(--font-weight-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-primary)' }}>Full License</h3>
             <ul style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', paddingLeft: 'var(--space-4)' }}>
-              <li>Unlimited projects</li>
-              <li>High-resolution exports</li>
-              <li>All premium features unlocked</li>
+              <li style={{ marginBottom: '4px' }}>Unlimited everything</li>
+              <li style={{ marginBottom: '4px' }}>Full-resolution exports</li>
+              <li>All premium features</li>
             </ul>
           </div>
         </div>
 
+        {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <button onClick={onActivate} style={{
-            padding: 'var(--space-3)', backgroundColor: 'var(--color-accent-primary)', color: 'white',
-            borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-md)',
-            border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'center'
+          <button onClick={onActivate} className="btn-primary" style={{
+            padding: 'var(--space-3)', fontSize: 'var(--font-size-md)',
+            display: 'flex', justifyContent: 'center', width: '100%',
           }}>
             Activate License
           </button>
           <button onClick={onContinueDemo} style={{
             padding: 'var(--space-3)', backgroundColor: 'transparent', color: 'var(--color-text-secondary)',
             borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-md)',
-            border: '1px solid var(--color-border-dark)', cursor: 'pointer', display: 'flex', justifyContent: 'center'
-          }}>
+            border: '1px solid var(--color-border-strong)', cursor: 'pointer', display: 'flex', justifyContent: 'center',
+            transition: 'all var(--transition-fast)',
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--color-accent-primary)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-strong)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+          >
             Continue in Demo Mode
           </button>
         </div>
@@ -103,25 +134,44 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100vh', justifyContent: 'center', alignItems: 'center',
-      backgroundColor: 'var(--color-bg-app)', padding: 'var(--space-6)'
+      background: 'radial-gradient(ellipse at 50% 30%, rgba(99,102,241,0.15), transparent 60%), var(--color-bg-app)',
+      padding: 'var(--space-6)'
     }}>
       <div style={{
-        maxWidth: 500, width: '100%', backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)',
-        borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-xl)', border: '1px solid var(--color-border-light)'
+        maxWidth: 500, width: '100%', padding: 'var(--space-6)',
+        borderRadius: 'var(--radius-xl)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'var(--glass-blur)',
+        WebkitBackdropFilter: 'var(--glass-blur)',
+        border: '1px solid var(--glass-border)',
+        boxShadow: 'var(--shadow-xl), var(--shadow-glow)',
       }}>
-        <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--space-2)' }}>License & Activation</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 'var(--radius-md)',
+            background: 'var(--gradient-accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '16px', fontWeight: 'bold', color: 'white',
+          }}>R</div>
+          <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Activate Reseonix</h2>
+        </div>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-6)' }}>
           Enter your license key to unlock the full version.
         </p>
 
         {error && (
-          <div style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#f87171',
+            padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
+            marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+          }}>
             {error}
           </div>
         )}
 
         <div style={{ marginBottom: 'var(--space-4)' }}>
-          <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--space-1)' }}>License Key</label>
+          <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--space-1)', color: 'var(--color-text-secondary)' }}>License Key</label>
           <input 
             type="text" 
             placeholder="RDP-XXXX-XXXX-XXXX" 
@@ -129,8 +179,9 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
             onChange={(e) => setKey(e.target.value)}
             style={{ 
               width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', 
-              border: '1px solid var(--color-border-dark)', fontSize: 'var(--font-size-md)',
-              fontFamily: 'monospace'
+              border: '1px solid var(--color-border-strong)', fontSize: 'var(--font-size-md)',
+              fontFamily: 'var(--font-family-mono)',
+              background: 'var(--color-bg-surface-raised)', color: 'var(--color-text-primary)',
             }}
           />
         </div>
@@ -138,15 +189,22 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
           <button 
             onClick={onBack}
-            style={{ padding: 'var(--space-2) var(--space-4)', backgroundColor: 'transparent', border: '1px solid var(--color-border-dark)', borderRadius: 'var(--radius-md)', flexShrink: 0, cursor: 'pointer' }}
+            style={{
+              padding: 'var(--space-2) var(--space-4)', backgroundColor: 'transparent',
+              border: '1px solid var(--color-border-strong)', borderRadius: 'var(--radius-md)',
+              flexShrink: 0, cursor: 'pointer', color: 'var(--color-text-secondary)',
+              transition: 'all var(--transition-fast)',
+            }}
           >Back</button>
           <button 
             onClick={handleActivate}
             disabled={loading || !key.trim()}
+            className="btn-primary"
             style={{ 
-              flex: 1, padding: 'var(--space-2) var(--space-4)', backgroundColor: 'var(--color-accent-primary)', color: 'white',
-              border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-weight-medium)', cursor: 'pointer',
-              opacity: (loading || !key.trim()) ? 0.6 : 1
+              flex: 1, padding: 'var(--space-2) var(--space-4)',
+              display: 'flex', justifyContent: 'center',
+              opacity: (loading || !key.trim()) ? 0.5 : 1,
+              cursor: (loading || !key.trim()) ? 'not-allowed' : 'pointer',
             }}
           >
             {loading ? 'Verifying...' : 'Activate Now'}
@@ -170,15 +228,28 @@ export const AppAccessController: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   if (!isReady) {
-    return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center' }}>Loading application engine...</div>;
+    return (
+      <div style={{
+        display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center',
+        background: 'var(--color-bg-app)', color: 'var(--color-text-secondary)',
+        flexDirection: 'column', gap: 'var(--space-3)',
+      }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 'var(--radius-md)',
+          background: 'var(--gradient-accent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '18px', fontWeight: 'bold', color: 'white',
+          animation: 'pulseGlow 2s ease-in-out infinite',
+        }}>R</div>
+        <span style={{ fontSize: 'var(--font-size-sm)' }}>Initializing Reseonix…</span>
+      </div>
+    );
   }
 
-  // If licensed (or in grace), go right through
   if (state.mode === 'licensed_active' || state.mode === 'offline_grace') {
     return <>{children}</>;
   }
 
-  // If user explicitly asks to see Activation screen
   if (showActivation) {
     return <ActivationScreen 
       onBack={() => setShowActivation(false)} 
@@ -186,7 +257,6 @@ export const AppAccessController: React.FC<{ children: React.ReactNode }> = ({ c
     />;
   }
 
-  // If in demo mode and hasn't explicitly clicked continue
   if (!hasYieldedWelcome) {
     return <WelcomeScreen 
       onContinueDemo={() => {

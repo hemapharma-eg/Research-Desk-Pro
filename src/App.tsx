@@ -14,6 +14,17 @@ import { AppAccessController } from './modules/licensing/screens/AppAccessContro
 import { DemoBanner } from './modules/licensing/components/DemoBanner';
 import { StatusWidget } from './modules/licensing/components/StatusWidget';
 
+const MODULES = [
+  { id: 'dashboard',         label: 'Dashboard',         icon: '◈' },
+  { id: 'reference-manager', label: 'References',        icon: '◉' },
+  { id: 'document-editor',   label: 'Editor',            icon: '◫' },
+  { id: 'graphing-studio',   label: 'Graphing',          icon: '△' },
+  { id: 'power-analysis',    label: 'Power Analysis',    icon: '⊕' },
+  { id: 'systematic-review', label: 'Systematic Review', icon: '◎' },
+  { id: 'table-builder',     label: 'Tables',            icon: '▦' },
+  { id: 'integrity-checker', label: 'Integrity',         icon: '◆' },
+];
+
 function AppContent() {
   const [activeModule, setActiveModule] = useState('dashboard');
   const { currentProject } = useProject();
@@ -22,13 +33,11 @@ function AppContent() {
     const detail = (e as CustomEvent).detail;
     (window as any).__pendingTableImport = detail;
     setActiveModule('table-builder');
-    // Forward the payload to the Table Builder module after navigation
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('table-builder:receive-stat-import', { detail }));
     }, 300);
   }, []);
 
-  // Generic cross-module navigation
   const handleNavigateToModule = useCallback((e: Event) => {
     const detail = (e as CustomEvent).detail;
     if (detail?.module) {
@@ -47,22 +56,14 @@ function AppContent() {
 
   const renderModuleContent = () => {
     switch (activeModule) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'reference-manager':
-        return <ReferenceManager />;
-      case 'document-editor':
-        return <DocumentEditor />;
-      case 'graphing-studio':
-        return <GraphingStudio />;
-      case 'power-analysis':
-        return <PowerAnalysis />;
-      case 'systematic-review':
-        return <SystematicReviewStudio />;
-      case 'table-builder':
-        return <TableBuilder />;
-      case 'integrity-checker':
-        return <IntegrityCheckerHome />;
+      case 'dashboard':         return <Dashboard />;
+      case 'reference-manager': return <ReferenceManager />;
+      case 'document-editor':   return <DocumentEditor />;
+      case 'graphing-studio':   return <GraphingStudio />;
+      case 'power-analysis':    return <PowerAnalysis />;
+      case 'systematic-review': return <SystematicReviewStudio />;
+      case 'table-builder':     return <TableBuilder />;
+      case 'integrity-checker': return <IntegrityCheckerHome />;
       default:
         return (
           <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-lg)' }}>
@@ -74,82 +75,93 @@ function AppContent() {
 
   return (
     <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--color-bg-app)' }}>
-      {/* Mac-native invisible drag region for the hiddenInset titlebar */}
+      {/* Mac-native invisible drag region */}
       <div className="titlebar drarg-region" style={{ height: 'var(--titlebar-height)', width: '100%', flexShrink: 0 }}></div>
 
-      <div className="app-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar */}
-        <aside className="print-hidden sidebar no-drag-region" style={{ width: 'var(--sidebar-width)', backgroundColor: 'var(--color-bg-sidebar)', borderRight: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', padding: 'var(--space-4)' }}>
-          <div className="branding" style={{ marginBottom: 'var(--space-6)', paddingLeft: 'var(--space-2)' }}>
-            <h2 style={{ fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-text-primary)' }}>Research Desk<span style={{ color: 'var(--color-accent-primary)' }}>.</span></h2>
+      {/* ─── Top Header Bar ─── */}
+      <header className="print-hidden no-drag-region" style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 var(--space-5)',
+        height: '48px', flexShrink: 0,
+        borderBottom: '1px solid var(--color-border-light)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'var(--glass-blur)',
+        WebkitBackdropFilter: 'var(--glass-blur)',
+      }}>
+        {/* Logo / Branding */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 'var(--radius-md)',
+            background: 'var(--gradient-accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'var(--shadow-glow)',
+            fontSize: '14px', fontWeight: 'bold', color: 'white',
+          }}>R</div>
+          <div>
+            <span style={{
+              fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)',
+              color: 'var(--color-text-primary)', letterSpacing: '-0.02em',
+            }}>
+              Reseonix
+            </span>
             {currentProject && (
-              <p style={{ marginTop: 'var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', wordBreak: 'break-all' }}>
+              <span style={{ 
+                marginLeft: 'var(--space-3)', fontSize: 'var(--font-size-xs)', 
+                color: 'var(--color-text-tertiary)',
+                padding: '2px 8px',
+                background: 'var(--color-bg-hover)',
+                borderRadius: 'var(--radius-full)',
+              }}>
                 {currentProject.split('/').pop()?.split('\\').pop() || 'Untitled Project'}
-              </p>
+              </span>
             )}
           </div>
-          
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-            {['Dashboard', 'Reference Manager', 'Document Editor', 'Graphing Studio', 'Power Analysis', 'Systematic Review', 'Table Builder', 'Integrity Checker'].map((item) => {
-              const id = item.toLowerCase().replace(' ', '-');
-              const isActive = activeModule === id;
-              return (
-                <button 
-                  key={id}
-                  onClick={() => setActiveModule(id)}
-                  style={{
-                    textAlign: 'left',
-                    padding: 'var(--space-2) var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    color: isActive ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
-                    backgroundColor: isActive ? 'rgba(41, 98, 255, 0.08)' : 'transparent',
-                    fontWeight: isActive ? 'var(--font-weight-medium)' : 'var(--font-weight-regular)',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseOver={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                    if (!isActive) e.currentTarget.style.color = 'var(--color-text-primary)';
-                  }}
-                  onMouseOut={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                    if (!isActive) e.currentTarget.style.color = 'var(--color-text-secondary)';
-                  }}
-                >
-                  {item}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
+        </div>
 
-        {/* Main Content Area */}
-        <main className="main-content no-drag-region" style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <header className="print-hidden" style={{ marginBottom: 'var(--space-5)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}>
-                  {activeModule.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                </h1>
-                <p style={{ marginTop: 'var(--space-1)', color: 'var(--color-text-secondary)' }}>Welcome to your workspace.</p>
-              </div>
-              <StatusWidget />
-            </div>
-            <DemoBanner />
-          </header>
-          
-          <div className="module-content" style={{ 
-            backgroundColor: 'var(--color-bg-surface)', 
-            borderRadius: 'var(--radius-lg)', 
-            border: '1px solid var(--color-border-light)',
-            boxShadow: 'var(--shadow-sm)',
-            flex: 1,
-            display: 'flex',
-            overflow: 'hidden'
-          }}>
-            {renderModuleContent()}
-          </div>
-        </main>
+        {/* Status Widget */}
+        <StatusWidget />
+      </header>
+
+      {/* ─── Horizontal Module Tab Navigation ─── */}
+      <nav className="module-nav print-hidden no-drag-region">
+        {MODULES.map(({ id, label, icon }) => (
+          <button
+            key={id}
+            className={`module-tab ${activeModule === id ? 'active' : ''}`}
+            onClick={() => setActiveModule(id)}
+          >
+            <span className="tab-icon">{icon}</span>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {/* ─── Demo Banner (if applicable) ─── */}
+      <div className="print-hidden" style={{ padding: '0 var(--space-5)', flexShrink: 0 }}>
+        <DemoBanner />
       </div>
+
+      {/* ─── Main Content Area ─── */}
+      <main className="main-content no-drag-region animate-fade-in" style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: 'var(--gradient-surface)',
+      }}>
+        <div className="module-content" style={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+          margin: 'var(--space-3)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--color-border-light)',
+          background: 'var(--color-bg-surface)',
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          {renderModuleContent()}
+        </div>
+      </main>
     </div>
   );
 }

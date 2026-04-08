@@ -115,7 +115,7 @@ function WizardContent() {
   const phase = getPhaseInfo();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--color-bg-app)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: 'var(--color-bg-app)' }}>
       {/* Header */}
       <div style={{ borderBottom: `3px solid ${phase.color}`, backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-4) var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>

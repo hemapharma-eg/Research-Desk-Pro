@@ -74,8 +74,8 @@
   },
   "main": "dist-electron/main/index.js",
   "build": {
-    "appId": "com.hemapharmaeg.researchdeskpro",
-    "productName": "Research Desk Pro",
+    "appId": "com.hemapharmaeg.reseonix",
+    "productName": "Reseonix",
     "directories": {
       "output": "release"
     },

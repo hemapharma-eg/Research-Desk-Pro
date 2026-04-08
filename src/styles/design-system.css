@@ -1,45 +1,61 @@
-/* Research Desk - Premium Design System */
+/* Reseonix — Futuristic Light Design System */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
-  /* Colors - Light Theme (Academic/Professional) */
-  --color-bg-app: #fcfcfc;
-  --color-bg-sidebar: #f5f5f7;
+  /* ─── Core Palette: Bright Futuristic Light ─── */
+  --color-bg-app: #f0f2f8;
+  --color-bg-sidebar: #e8ebf4;
   --color-bg-surface: #ffffff;
-  --color-bg-hover: #eaeaea;
-  --color-bg-active: #e0e0e0;
-  
-  --color-text-primary: #1d1d1f;
-  --color-text-secondary: #86868b;
-  --color-text-tertiary: #a1a1a6;
-  
-  --color-border-light: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.15);
-  
-  --color-accent-primary: #2962ff; /* Deep royal blue for academic feel */
-  --color-accent-hover: #0039cb;
-  
-  --color-success: #34c759;
-  --color-warning: #ffb340;
-  --color-danger: #ff3b30;
+  --color-bg-surface-raised: #f6f7fb;
+  --color-bg-hover: rgba(99, 102, 241, 0.06);
+  --color-bg-active: rgba(99, 102, 241, 0.10);
 
-  /* Typography */
-  --font-family-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-family-serif: "Georgia", "Times New Roman", Times, serif; /* For document bodies */
-  --font-family-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-md: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 2rem;
+  --color-text-primary: #1a1d2e;
+  --color-text-secondary: #5e6277;
+  --color-text-tertiary: #9497ab;
+  --color-text-on-accent: #ffffff;
 
+  --color-border-light: rgba(0, 0, 0, 0.06);
+  --color-border-strong: rgba(0, 0, 0, 0.10);
+  --color-border-dark: rgba(0, 0, 0, 0.12);
+
+  /* Accent: Electric Indigo → Teal-Cyan */
+  --color-accent-primary: #6366f1;
+  --color-accent-secondary: #0ea5e9;
+  --color-accent-hover: #818cf8;
+  --color-accent-glow: rgba(99, 102, 241, 0.18);
+  --gradient-accent: linear-gradient(135deg, #6366f1, #0ea5e9);
+  --gradient-accent-subtle: linear-gradient(135deg, rgba(99,102,241,0.07), rgba(14,165,233,0.05));
+  --gradient-surface: linear-gradient(180deg, #f0f2f8 0%, #e8ebf4 100%);
+  --gradient-hero: radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.08), transparent 60%);
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* ─── Typography ─── */
+  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-serif: 'Georgia', 'Times New Roman', Times, serif;
+  --font-family-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-md: 0.9375rem;
+  --font-size-lg: 1.0625rem;
+  --font-size-xl: 1.1875rem;
+  --font-size-2xl: 1.375rem;
+  --font-size-3xl: 1.75rem;
+  --font-size-display: 2.25rem;
+
+  --font-weight-light: 300;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* Spacing */
+  /* ─── Spacing ─── */
+  --space-0: 0;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -47,27 +63,41 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
   --space-8: 3rem;
-  
-  /* Radii */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+
+  /* ─── Radii ─── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* Shadows - Subtle glass/premium feel */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
-  --shadow-lg: 0 12px 24px rgba(0,0,0,0.08);
-  --shadow-panel: 0 0 0 1px var(--color-border-light), 0 8px 32px rgba(0,0,0,0.08);
+  /* ─── Shadows: Clean Elevation ─── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.07);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.09);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,0.10);
+  --shadow-panel: 0 0 0 1px var(--color-border-light), 0 8px 32px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 16px var(--color-accent-glow);
+  --shadow-glow-lg: 0 0 32px var(--color-accent-glow), 0 0 64px rgba(99, 102, 241, 0.06);
 
-  /* Layout */
+  /* ─── Glass effect (frosted light) ─── */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur: blur(20px);
+
+  /* ─── Layout ─── */
   --titlebar-height: 38px;
   --sidebar-width: 250px;
+  --nav-height: 48px;
+
+  /* ─── Transitions ─── */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Global Setup */
-* {
+/* ─── Global Resets ─── */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -77,12 +107,13 @@ body, html {
   font-family: var(--font-family-sans);
   background-color: var(--color-bg-app);
   color: var(--color-text-primary);
-  font-size: 14px; /* Desktop-optimized base */
+  font-size: 14px;
   height: 100vh;
   width: 100vw;
-  overflow: hidden; /* App feels like a native window, scroll handled internally */
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
 #root {
@@ -92,30 +123,74 @@ body, html {
   flex-direction: column;
 }
 
-/* Base Primitives */
+/* ─── Typography Primitives ─── */
 h1, h2, h3, h4, h5, h6 {
   font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
+  line-height: 1.25;
 }
 
 p {
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--color-text-secondary);
 }
 
+/* ─── Interactive Primitives ─── */
 button {
   font-family: inherit;
   cursor: pointer;
   border: none;
   background: transparent;
+  transition: all var(--transition-fast);
+  color: var(--color-text-primary);
 }
 
-input, textarea {
+input, textarea, select {
   font-family: inherit;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none;
 }
 
-/* Utilities */
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+
+select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%235e6277' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 6px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 28px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* ─── Utilities ─── */
 .drarg-region {
   -webkit-app-region: drag;
   user-select: none;
@@ -123,4 +198,117 @@ input, textarea {
 
 .no-drag-region {
   -webkit-app-region: no-drag;
+}
+
+/* ─── Module Navigation Tabs ─── */
+.module-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-4);
+  height: var(--nav-height);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--color-border-light);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.module-nav::-webkit-scrollbar {
+  height: 0;
+}
+
+.module-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  position: relative;
+  border: 1px solid transparent;
+}
+
+.module-tab:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.module-tab.active {
+  color: var(--color-accent-primary);
+  background: var(--color-bg-active);
+  border-color: rgba(99, 102, 241, 0.15);
+  box-shadow: var(--shadow-glow);
+}
+
+.module-tab .tab-icon {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.module-tab.active .tab-icon {
+  opacity: 1;
+}
+
+/* ─── Glassmorphic Panels ─── */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+}
+
+/* ─── Accent Buttons ─── */
+.btn-primary {
+  background: var(--gradient-accent);
+  color: var(--color-text-on-accent);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  box-shadow: var(--shadow-glow);
+  transition: all var(--transition-fast);
+}
+
+.btn-primary:hover {
+  box-shadow: var(--shadow-glow-lg);
+  transform: translateY(-1px);
+}
+
+/* ─── Animations ─── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 12px var(--color-accent-glow); }
+  50% { box-shadow: 0 0 24px var(--color-accent-glow), 0 0 48px rgba(99, 102, 241, 0.06); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* ─── Print Styles ─── */
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
 }

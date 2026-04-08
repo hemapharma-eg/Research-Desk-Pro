@@ -53,7 +53,7 @@ export function Dashboard() {
       </h2>
 
       {error && (
-        <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-hover)', color: 'var(--color-danger)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+        <div style={{ padding: 'var(--space-3)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#f87171', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
           {error}
         </div>
       )}
@@ -63,13 +63,9 @@ export function Dashboard() {
           <p style={{ color: 'var(--color-text-secondary)' }}>You don't have any project open.</p>
           <button 
             onClick={handleCreateOrOpenProject}
+            className="btn-primary"
             style={{
               padding: 'var(--space-2) var(--space-4)',
-              backgroundColor: 'var(--color-accent-primary)',
-              color: 'white',
-              borderRadius: 'var(--radius-md)',
-              fontWeight: 'var(--font-weight-medium)',
-              boxShadow: 'var(--shadow-sm)'
             }}
           >
             Create or Open Project
