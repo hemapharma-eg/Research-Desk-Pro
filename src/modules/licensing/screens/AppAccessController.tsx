@@ -30,7 +30,7 @@ export const WelcomeScreen: React.FC<{ onContinueDemo: () => void, onActivate: (
             fontSize: 'var(--font-size-display)', fontWeight: 'var(--font-weight-bold)',
             color: 'var(--color-text-primary)', letterSpacing: '-0.03em',
           }}>
-            Reseonix
+            ReseolabX
           </h1>
           <p style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-md)', color: 'var(--color-text-secondary)' }}>
             Next-generation academic research platform.
@@ -153,7 +153,7 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '16px', fontWeight: 'bold', color: 'white',
           }}>R</div>
-          <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Activate Reseonix</h2>
+          <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Activate ReseolabX</h2>
         </div>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-6)' }}>
           Enter your license key to unlock the full version.
@@ -241,7 +241,7 @@ export const AppAccessController: React.FC<{ children: React.ReactNode }> = ({ c
           fontSize: '18px', fontWeight: 'bold', color: 'white',
           animation: 'pulseGlow 2s ease-in-out infinite',
         }}>R</div>
-        <span style={{ fontSize: 'var(--font-size-sm)' }}>Initializing Reseonix…</span>
+        <span style={{ fontSize: 'var(--font-size-sm)' }}>Initializing ReseolabX…</span>
       </div>
     );
   }

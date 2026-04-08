@@ -102,7 +102,7 @@ function AppContent() {
               fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)',
               color: 'var(--color-text-primary)', letterSpacing: '-0.02em',
             }}>
-              Reseonix
+              ReseolabX
             </span>
             {currentProject && (
               <span style={{ 

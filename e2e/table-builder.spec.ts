@@ -26,7 +26,7 @@ test.describe('Table Builder Module E2E Workflows', () => {
   test('should launch app and navigate to Table Builder', async () => {
     await page.waitForLoadState('domcontentloaded');
     
-    // Verify it loads the Reseonix main UI
+    // Verify it loads the ReseolabX main UI
     await expect(page.locator('.rd-sidebar')).toBeVisible({ timeout: 15000 });
     
     // Click on Table Builder in the sidebar navigation

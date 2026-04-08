@@ -316,7 +316,7 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
     try {
       let exportHtml = editor.getHTML();
       if (!entitlements.canExportWithoutWatermark) {
-        exportHtml += '<br/><hr/><p style="color: gray; text-align: center;"><i>Created with Reseonix (Demo Version)</i></p>';
+        exportHtml += '<br/><hr/><p style="color: gray; text-align: center;"><i>Created with ReseolabX (Demo Version)</i></p>';
       }
 
       const result = await window.api.exportDocx(exportHtml, documentTitle || 'Document');

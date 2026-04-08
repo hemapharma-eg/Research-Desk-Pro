@@ -74,8 +74,8 @@
   },
   "main": "dist-electron/main/index.js",
   "build": {
-    "appId": "com.hemapharmaeg.reseonix",
-    "productName": "Reseonix",
+    "appId": "com.hemapharmaeg.reseolabx",
+    "productName": "ReseolabX",
     "directories": {
       "output": "release"
     },
