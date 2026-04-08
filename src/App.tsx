@@ -90,13 +90,10 @@ function AppContent() {
       }}>
         {/* Logo / Branding */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{
+          <img src="/icon.png" alt="ReseolabX Logo" style={{
             width: 28, height: 28, borderRadius: 'var(--radius-md)',
-            background: 'var(--gradient-accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: 'var(--shadow-glow)',
-            fontSize: '14px', fontWeight: 'bold', color: 'white',
-          }}>R</div>
+            boxShadow: 'var(--shadow-glow)', objectFit: 'contain'
+          }} />
           <div>
             <span style={{
               fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-bold)',

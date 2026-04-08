@@ -13,7 +13,7 @@ const VITE_DEV_SERVER_URL = "http://localhost:5173";
 
 function createWindow() {
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC || '', 'electron-vite.svg'),
+    icon: path.join(__dirname, '../../build/icon.png'),
     width: 1280,
     height: 800,
     titleBarStyle: 'hiddenInset',
@@ -57,6 +57,9 @@ app.whenReady().then(() => {
     }
   });
 
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(path.join(__dirname, '../../build/icon.png'));
+  }
   createWindow();
 });
 

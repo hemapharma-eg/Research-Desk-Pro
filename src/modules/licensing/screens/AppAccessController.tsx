@@ -19,13 +19,10 @@ export const WelcomeScreen: React.FC<{ onContinueDemo: () => void, onActivate: (
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-          <div style={{
+          <img src="/icon.png" alt="Logo" style={{
             width: 56, height: 56, borderRadius: 'var(--radius-lg)', margin: '0 auto var(--space-4)',
-            background: 'var(--gradient-accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: 'var(--shadow-glow-lg)',
-            fontSize: '24px', fontWeight: 'bold', color: 'white',
-          }}>R</div>
+            boxShadow: 'var(--shadow-glow-lg)', objectFit: 'contain', display: 'block'
+          }} />
           <h1 style={{
             fontSize: 'var(--font-size-display)', fontWeight: 'var(--font-weight-bold)',
             color: 'var(--color-text-primary)', letterSpacing: '-0.03em',
@@ -147,12 +144,10 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
         boxShadow: 'var(--shadow-xl), var(--shadow-glow)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
-          <div style={{
+          <img src="/icon.png" alt="Logo" style={{
             width: 36, height: 36, borderRadius: 'var(--radius-md)',
-            background: 'var(--gradient-accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '16px', fontWeight: 'bold', color: 'white',
-          }}>R</div>
+            objectFit: 'contain'
+          }} />
           <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)' }}>Activate ReseolabX</h2>
         </div>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-6)' }}>
@@ -234,20 +229,14 @@ export const AppAccessController: React.FC<{ children: React.ReactNode }> = ({ c
         background: 'var(--color-bg-app)', color: 'var(--color-text-secondary)',
         flexDirection: 'column', gap: 'var(--space-3)',
       }}>
-        <div style={{
+        <img src="/icon.png" alt="Logo" style={{
           width: 40, height: 40, borderRadius: 'var(--radius-md)',
-          background: 'var(--gradient-accent)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '18px', fontWeight: 'bold', color: 'white',
-          animation: 'pulseGlow 2s ease-in-out infinite',
-        }}>R</div>
+          objectFit: 'contain',
+          animation: 'pulseGlow 2s ease-in-out infinite'
+        }} />
         <span style={{ fontSize: 'var(--font-size-sm)' }}>Initializing ReseolabX…</span>
       </div>
     );
-  }
-
-  if (state.mode === 'licensed_active' || state.mode === 'offline_grace') {
-    return <>{children}</>;
   }
 
   if (showActivation) {
@@ -255,6 +244,10 @@ export const AppAccessController: React.FC<{ children: React.ReactNode }> = ({ c
       onBack={() => setShowActivation(false)} 
       onSuccess={() => setShowActivation(false)} 
     />;
+  }
+
+  if (state.mode === 'licensed_active' || state.mode === 'offline_grace') {
+    return <>{children}</>;
   }
 
   if (!hasYieldedWelcome) {
