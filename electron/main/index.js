@@ -31,8 +31,6 @@ function createWindow() {
     win.webContents.openDevTools();
   } else {
     win.loadFile(path.join(process.env.DIST || '', 'index.html'));
-    // TEMPORARY: Unlocking DevTools in production to diagnose white screen error
-    win.webContents.openDevTools();
   }
 }
 
