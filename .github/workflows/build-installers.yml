@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-13, windows-latest]
     
     steps:
       - name: Checkout Code
@@ -34,7 +34,7 @@ jobs:
         run: npm run build
 
       - name: Package Mac Application
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-13'
         run: npx electron-builder --mac
 
       - name: Package Windows Application
@@ -42,7 +42,7 @@ jobs:
         run: npx electron-builder --win
 
       - name: Upload macOS Artifact
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-13'
         uses: actions/upload-artifact@v4
         with:
           name: ReseolabX-macOS
