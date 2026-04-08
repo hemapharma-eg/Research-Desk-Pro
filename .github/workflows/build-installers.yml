@@ -26,7 +26,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          architecture: x64
 
       - name: Install Dependencies
         run: npm install
@@ -36,11 +35,11 @@ jobs:
 
       - name: Package Mac Application
         if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac
+        run: npx electron-builder --mac --publish never
 
       - name: Package Windows Application
         if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win
+        run: npx electron-builder --win --publish never
 
       - name: Upload macOS Artifact
         if: matrix.os == 'macos-latest'
