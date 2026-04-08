@@ -38,7 +38,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          architecture: ${{ matrix.arch }}
 
       - name: Install Dependencies
         run: npm install
@@ -48,12 +47,7 @@ jobs:
 
       - name: Package Mac Application
         if: matrix.id != 'windows'
-        run: |
-          if [ "${{ matrix.id }}" == "mac-intel" ]; then
-            npx electron-builder --mac zip --${{ matrix.arch }} --publish never
-          else
-            npx electron-builder --mac --${{ matrix.arch }} --publish never
-          fi
+        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: Package Windows Application
         if: matrix.id == 'windows'
@@ -64,9 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ReseolabX-${{ matrix.name }}
-          path: |
-            release/*.dmg
-            release/*.zip
+          path: release/*.dmg
           
       - name: Upload Windows Artifact
         if: matrix.id == 'windows'
