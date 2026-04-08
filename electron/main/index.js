@@ -46,6 +46,11 @@ app.on('before-quit', () => {
   dbManager.closeDatabase();
 });
 
+// FIX: Prevent Chromium GPU process from white-screening when running the x64 app on Apple Silicon via Rosetta 2
+if (process.platform === 'darwin' && app.runningUnderARM64Translation) {
+  app.disableHardwareAcceleration();
+}
+
 app.whenReady().then(() => {
   protocol.registerFileProtocol('local-resource', (request, callback) => {
     const url = request.url.replace('local-resource://', '');
