@@ -35,7 +35,7 @@ jobs:
 
       - name: Package Mac Application
         if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac --publish never
+        run: npx electron-builder --mac --x64 --arm64 --publish never
 
       - name: Package Windows Application
         if: matrix.os == 'windows-latest'
