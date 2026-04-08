@@ -11,12 +11,24 @@ env:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: windows-latest
+            arch: x64
+            id: windows
+            name: Windows
+          - os: macos-latest
+            arch: arm64
+            id: mac-silicon
+            name: macOS-Silicon
+          - os: macos-latest
+            arch: x64
+            id: mac-intel
+            name: macOS-Intel
     
     steps:
       - name: Checkout Code
@@ -26,6 +38,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          architecture: ${{ matrix.arch }}
 
       - name: Install Dependencies
         run: npm install
@@ -34,23 +47,23 @@ jobs:
         run: npm run build
 
       - name: Package Mac Application
-        if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac --x64 --arm64 --publish never
+        if: matrix.id != 'windows'
+        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: Package Windows Application
-        if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win --publish never
+        if: matrix.id == 'windows'
+        run: npx electron-builder --win --${{ matrix.arch }} --publish never
 
       - name: Upload macOS Artifact
-        if: matrix.os == 'macos-latest'
+        if: matrix.id != 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ReseolabX-macOS
+          name: ReseolabX-${{ matrix.name }}
           path: release/*.dmg
           
       - name: Upload Windows Artifact
-        if: matrix.os == 'windows-latest'
+        if: matrix.id == 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ReseolabX-Windows
+          name: ReseolabX-${{ matrix.name }}
           path: release/*.exe
