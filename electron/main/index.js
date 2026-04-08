@@ -31,6 +31,8 @@ function createWindow() {
     win.webContents.openDevTools();
   } else {
     win.loadFile(path.join(process.env.DIST || '', 'index.html'));
+    // TEMPORARY: Unlocking DevTools in production to diagnose white screen error
+    win.webContents.openDevTools();
   }
 }
 
@@ -46,8 +48,8 @@ app.on('before-quit', () => {
   dbManager.closeDatabase();
 });
 
-// FIX: Prevent Chromium GPU process from white-screening when running the x64 app on Apple Silicon via Rosetta 2
-if (process.platform === 'darwin' && app.runningUnderARM64Translation) {
+// FIX: Prevent Chromium GPU process from white-screening on Mac Intel graphics chips
+if (process.platform === 'darwin' && process.arch === 'x64') {
   app.disableHardwareAcceleration();
 }
 
