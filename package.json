@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "dev:vite": "vite",
     "dev:electron": "wait-on tcp:5173 && env -u ELECTRON_RUN_AS_NODE cross-env NODE_ENV=development electron electron/main/index.js",
-    "copy:electron": "cp -r electron dist-electron"
+    "copy:electron": "node -e \"require('fs').rmSync('dist-electron',{recursive:true,force:true})\" && cp -r electron dist-electron"
   },
   "dependencies": {
     "@citation-js/core": "^0.7.21",
