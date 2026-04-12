@@ -60,6 +60,15 @@ contextBridge.exposeInMainWorld('api', {
 
   importCSVFile: () => ipcRenderer.invoke('graphing:importCSVFile'),
 
+  // Licensing
+  license: {
+    getState: () => ipcRenderer.invoke('license:get-state'),
+    saveActivation: (data) => ipcRenderer.invoke('license:save-activation', data),
+    refreshVerification: (data) => ipcRenderer.invoke('license:refresh-verification', data),
+    enterDemo: () => ipcRenderer.invoke('license:enter-demo'),
+    trackUsage: (key, amount) => ipcRenderer.invoke('license:track-usage', { key, amount })
+  },
+
   // Utilities
   readFileBase64: (filePath) => ipcRenderer.invoke('file:readBase64', filePath),
 

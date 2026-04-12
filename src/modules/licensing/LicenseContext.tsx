@@ -4,11 +4,7 @@ import { EntitlementEngine, DEFAULT_DEMO_POLICY } from './EntitlementEngine';
 
 declare global {
   interface Window {
-    electron?: {
-      ipcRenderer: {
-        invoke(channel: string, ...args: any[]): Promise<any>;
-      }
-    };
+    api: any;
   }
 }
 
@@ -55,8 +51,8 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshLicenseState = async () => {
     let currentData = { deviceId: null as string | null, state: defaultState, counters: defaultCounters };
     try {
-      if (window.electron?.ipcRenderer) {
-        const payload = await window.electron.ipcRenderer.invoke('license:get-state');
+      if (window.api && window.api.license) {
+        const payload = await window.api.license.getState();
         if (payload) {
           currentData = { deviceId: payload.deviceId, state: payload.state || defaultState, counters: payload.counters || defaultCounters };
         }
@@ -109,8 +105,8 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
             await enterDemoMode();
           } else if (serverData.success && serverData.entitlementToken) {
             // Update local token successfully
-            if (window.electron?.ipcRenderer) {
-              await window.electron.ipcRenderer.invoke('license:refresh-verification', {
+            if (window.api && window.api.license) {
+              await window.api.license.refreshVerification({
                 entitlementToken: serverData.entitlementToken,
                 offlineGraceDays: serverData.offlineGraceDays || 30,
                 reverifyAfterHours: serverData.reverifyAfterHours || 72
@@ -136,8 +132,8 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const activateLicense = async (activationData: any) => {
-    if (window.electron?.ipcRenderer) {
-      const res = await window.electron.ipcRenderer.invoke('license:save-activation', activationData);
+    if (window.api && window.api.license) {
+      const res = await window.api.license.saveActivation(activationData);
       if (res.success) {
         await refreshLicenseState();
         // Dispatch global event for other components unaware of React Context (if needed)
@@ -167,8 +163,8 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const enterDemoMode = async () => {
-    if (window.electron?.ipcRenderer) {
-      await window.electron.ipcRenderer.invoke('license:enter-demo');
+    if (window.api && window.api.license) {
+      await window.api.license.enterDemo();
       await refreshLicenseState();
       window.dispatchEvent(new CustomEvent('DEMO_STARTED'));
       return;
@@ -182,8 +178,8 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const trackUsage = async (key: string, amount = 1) => {
-    if (window.electron?.ipcRenderer) {
-      const newCount = await window.electron.ipcRenderer.invoke('license:track-usage', { key, amount });
+    if (window.api && window.api.license) {
+      const newCount = await window.api.license.trackUsage(key, amount);
       setCounters(prev => ({ ...prev, [key]: newCount }));
       return;
     }

@@ -13,6 +13,7 @@ import { LicenseProvider } from './modules/licensing/LicenseContext';
 import { AppAccessController } from './modules/licensing/screens/AppAccessController';
 import { DemoBanner } from './modules/licensing/components/DemoBanner';
 import { StatusWidget } from './modules/licensing/components/StatusWidget';
+import logoUrl from './assets/logo.png';
 
 const MODULES = [
   { id: 'dashboard',         label: 'Dashboard',         icon: '◈' },
@@ -90,7 +91,7 @@ function AppContent() {
       }}>
         {/* Logo / Branding */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <img src="/icon.png" alt="ReseolabX Logo" style={{
+          <img src={logoUrl} alt="ReseolabX Logo" style={{
             width: 28, height: 28, borderRadius: 'var(--radius-md)',
             boxShadow: 'var(--shadow-glow)', objectFit: 'contain'
           }} />

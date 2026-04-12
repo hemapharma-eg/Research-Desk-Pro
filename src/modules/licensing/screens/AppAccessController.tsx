@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLicense } from '../LicenseContext';
+import logoUrl from '../../../assets/logo.png';
 
 export const WelcomeScreen: React.FC<{ onContinueDemo: () => void, onActivate: () => void }> = ({ onContinueDemo, onActivate }) => {
   return (
@@ -19,7 +20,7 @@ export const WelcomeScreen: React.FC<{ onContinueDemo: () => void, onActivate: (
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-          <img src="/icon.png" alt="Logo" style={{
+          <img src={logoUrl} alt="Logo" style={{
             width: 56, height: 56, borderRadius: 'var(--radius-lg)', margin: '0 auto var(--space-4)',
             boxShadow: 'var(--shadow-glow-lg)', objectFit: 'contain', display: 'block'
           }} />
@@ -144,7 +145,7 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
         boxShadow: 'var(--shadow-xl), var(--shadow-glow)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
-          <img src="/icon.png" alt="Logo" style={{
+          <img src={logoUrl} alt="Logo" style={{
             width: 36, height: 36, borderRadius: 'var(--radius-md)',
             objectFit: 'contain'
           }} />
@@ -229,7 +230,7 @@ export const AppAccessController: React.FC<{ children: React.ReactNode }> = ({ c
         background: 'var(--color-bg-app)', color: 'var(--color-text-secondary)',
         flexDirection: 'column', gap: 'var(--space-3)',
       }}>
-        <img src="/icon.png" alt="Logo" style={{
+        <img src={logoUrl} alt="Logo" style={{
           width: 40, height: 40, borderRadius: 'var(--radius-md)',
           objectFit: 'contain',
           animation: 'pulseGlow 2s ease-in-out infinite'

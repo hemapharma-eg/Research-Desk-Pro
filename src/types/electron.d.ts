@@ -108,6 +108,14 @@ export interface ElectronAPI {
   exportLib: (refs: Reference[], format: 'ris' | 'bib') => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
   importStyleFile: () => Promise<{ success: boolean; data?: CustomStyle; canceled?: boolean; error?: string }>;
   getCustomStyles: () => Promise<{ success: boolean; data?: CustomStyle[]; error?: string }>;
+  // Licensing
+  license: {
+    getState: () => Promise<any>;
+    saveActivation: (data: any) => Promise<{ success: boolean; error?: string }>;
+    refreshVerification: (data: any) => Promise<{ success: boolean; error?: string }>;
+    enterDemo: () => Promise<{ success: boolean; error?: string }>;
+    trackUsage: (key: string, amount: number) => Promise<number>;
+  };
 
   getFolders: () => Promise<{ success: boolean; data?: Folder[]; error?: string }>;
   createFolder: (name: string, parent_id?: string | null) => Promise<{ success: boolean; data?: Folder; error?: string }>;
