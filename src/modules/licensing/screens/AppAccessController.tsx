@@ -104,7 +104,8 @@ export const ActivationScreen: React.FC<{ onBack: () => void, onSuccess: () => v
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:4000/api/license/activate', {
+      const LICENSE_SERVER = import.meta.env.VITE_LICENSE_SERVER_URL || 'http://localhost:4000';
+      const res = await fetch(`${LICENSE_SERVER}/api/license/activate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

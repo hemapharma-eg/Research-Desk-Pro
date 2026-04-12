@@ -89,7 +89,8 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Perform silent background sync if we have an active license token
       if (data.state.mode === 'licensed_active' && data.state.entitlement_token && data.deviceId) {
         try {
-          const res = await fetch('http://localhost:4000/api/license/refresh', {
+          const LICENSE_SERVER = import.meta.env.VITE_LICENSE_SERVER_URL || 'http://localhost:4000';
+          const res = await fetch(`${LICENSE_SERVER}/api/license/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

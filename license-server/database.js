@@ -1,14 +1,19 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const dbPath = path.join(__dirname, 'license.db');
-const db = new sqlite3.Database(dbPath);
+// Connect to PostgreSQL (Supabase) via DATABASE_URL
+// For local development, you can set DATABASE_URL in a .env file
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // Required for Supabase / most cloud databases
+  }
+});
 
-function initDb() {
-  db.serialize(() => {
+async function initDb() {
+  try {
     // 1. Licenses
-    db.run(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS licenses (
         id TEXT PRIMARY KEY,
         license_key TEXT UNIQUE NOT NULL,
@@ -21,18 +26,18 @@ function initDb() {
         current_activation_count INTEGER DEFAULT 0,
         allow_offline_grace INTEGER DEFAULT 1,
         custom_policy_json TEXT DEFAULT '{}',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        activated_at DATETIME,
-        expires_at DATETIME,
-        revoked_at DATETIME,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        activated_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        revoked_at TIMESTAMP,
         revoked_reason TEXT,
         notes TEXT
       )
     `);
 
     // 2. Activations (Devices bound to a license)
-    db.run(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS activations (
         id TEXT PRIMARY KEY,
         license_id TEXT NOT NULL,
@@ -40,8 +45,8 @@ function initDb() {
         machine_fingerprint TEXT,
         platform TEXT,
         app_version TEXT,
-        first_activated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_verified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        first_activated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         status TEXT DEFAULT 'active',
         ip_address TEXT,
         metadata_json TEXT DEFAULT '{}',
@@ -50,7 +55,7 @@ function initDb() {
     `);
 
     // 3. Global License Policy
-    db.run(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS license_policy (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         demo_project_limit INTEGER DEFAULT 3,
@@ -66,17 +71,18 @@ function initDb() {
         reverify_after_hours INTEGER DEFAULT 72,
         support_email TEXT DEFAULT 'support@example.com',
         help_text TEXT DEFAULT 'Please contact support if you believe this license should be active.',
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Insert default policy if not exists
-    db.run(`
-      INSERT OR IGNORE INTO license_policy (id) VALUES (1)
+    // Insert default policy if not exists (Postgres syntax)
+    await pool.query(`
+      INSERT INTO license_policy (id) VALUES (1)
+      ON CONFLICT (id) DO NOTHING
     `);
 
     // 4. Audit Log
-    db.run(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_log (
         id TEXT PRIMARY KEY,
         actor_type TEXT,
@@ -84,29 +90,39 @@ function initDb() {
         action TEXT NOT NULL,
         target_type TEXT,
         target_id TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         details_json TEXT DEFAULT '{}'
       )
     `);
-  });
+    
+    console.log("Database tables initialized successfully (PostgreSQL).");
+  } catch (err) {
+    console.error("Error initializing database tables:", err);
+  }
 }
 
-// Promise wrappers
-const all = (query, params = []) => new Promise((resolve, reject) => {
-  db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows));
-});
+// Helper query converter from SQLite (?) to Postgres ($1, $2, ...)
+function convertQuery(query) {
+  let count = 1;
+  return query.replace(/\?/g, () => `$${count++}`);
+}
 
-const get = (query, params = []) => new Promise((resolve, reject) => {
-  db.get(query, params, (err, row) => err ? reject(err) : resolve(row));
-});
+// Promise wrappers to mimic previous sqlite3 behavior seamlessly
+const all = async (query, params = []) => {
+  const result = await pool.query(convertQuery(query), params);
+  return result.rows;
+};
 
-const run = (query, params = []) => new Promise((resolve, reject) => {
-  db.run(query, params, function(err) {
-    if (err) reject(err);
-    else resolve(this);
-  });
-});
+const get = async (query, params = []) => {
+  const result = await pool.query(convertQuery(query), params);
+  return result.rows[0]; // Returns undefined if no row, like sqlite
+};
+
+const run = async (query, params = []) => {
+  await pool.query(convertQuery(query), params);
+  return true; 
+};
 
 initDb();
 
-module.exports = { db, all, get, run };
+module.exports = { pool, all, get, run };

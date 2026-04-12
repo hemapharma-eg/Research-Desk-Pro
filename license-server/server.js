@@ -179,6 +179,19 @@ app.get('/api/license/config', async (req, res) => {
 // ADMIN ENDPOINTS
 // -----------------------------------------------------
 
+// ADMIN AUTH MIDDLEWARE
+const adminAuth = (req, res, next) => {
+  const providedKey = req.headers['x-admin-key'];
+  const expectedKey = process.env.ADMIN_PASSWORD || '123456789';
+  
+  if (!providedKey || providedKey !== expectedKey) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid Admin Password' });
+  }
+  next();
+};
+
+app.use('/api/admin', adminAuth);
+
 // GET ALL LICENSES
 app.get('/api/admin/licenses', async (req, res) => {
   try {
