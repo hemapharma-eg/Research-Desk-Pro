@@ -25,7 +25,7 @@ jobs:
             arch: arm64
             id: mac-silicon
             name: macOS-Silicon
-          - os: macos-13
+          - os: macos-latest
             arch: x64
             id: mac-intel
             name: macOS-Intel
@@ -44,6 +44,13 @@ jobs:
 
       - name: Build Application
         run: npm run build
+
+      - name: Rebuild native modules for x64 (Intel cross-compile)
+        if: matrix.id == 'mac-intel'
+        env:
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+        run: npx electron-rebuild --arch=x64 --force
 
       - name: Package Mac Application
         if: matrix.id != 'windows'
