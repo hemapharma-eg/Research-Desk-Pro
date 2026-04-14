@@ -33,6 +33,52 @@ const createEntitlementToken = (license, policy, activationId) => {
 };
 
 // -----------------------------------------------------
+// DIAGNOSTIC HEALTH CHECK
+// -----------------------------------------------------
+app.get('/api/health', async (req, res) => {
+  const dbUrl = process.env.DATABASE_URL || 'NOT SET';
+  // Mask the password in the URL for safe display
+  const maskedUrl = dbUrl.replace(/:([^@:]+)@/, ':****@');
+  
+  let dbStatus = 'unknown';
+  let dbError = null;
+  let dbResult = null;
+  
+  try {
+    const result = await db.get('SELECT NOW() as server_time');
+    dbStatus = 'connected';
+    dbResult = result;
+  } catch (err) {
+    dbStatus = 'failed';
+    dbError = {
+      message: err.message,
+      code: err.code,
+      errno: err.errno,
+      syscall: err.syscall,
+      hostname: err.hostname,
+      address: err.address,
+      port: err.port
+    };
+  }
+  
+  res.json({
+    success: dbStatus === 'connected',
+    server: 'running',
+    database: {
+      status: dbStatus,
+      maskedUrl: maskedUrl,
+      error: dbError,
+      result: dbResult
+    },
+    env: {
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      hasDbUrl: !!process.env.DATABASE_URL,
+      dbUrlLength: dbUrl.length
+    }
+  });
+});
+
+// -----------------------------------------------------
 // PUBLIC APP ENDPOINTS
 // -----------------------------------------------------
 
