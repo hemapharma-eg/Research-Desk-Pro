@@ -144,6 +144,12 @@
             });
             if (!requireAuth(res)) return;
 
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                alert('Error generating license: ' + (data.error || data.message || 'Unknown error'));
+                return;
+            }
+
             document.getElementById('addModal').classList.add('hidden');
             document.getElementById('addForm').reset();
             fetchLicenses();
