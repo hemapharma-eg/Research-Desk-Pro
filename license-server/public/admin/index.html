@@ -104,7 +104,14 @@
             const contentType = res.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 const textError = await res.text();
-                document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4">Server Crashed (HTML returned): ${textError.substring(0, 200)}</td></tr>`;
+                const td = document.createElement('td');
+                td.colSpan = 5;
+                td.className = 'text-red-500 p-4 font-mono text-xs whitespace-pre-wrap';
+                td.textContent = 'Server Crashed (HTML returned):\n\n' + textError.substring(0, 1000);
+                const tr = document.createElement('tr');
+                tr.appendChild(td);
+                document.getElementById('licenseTableBody').innerHTML = '';
+                document.getElementById('licenseTableBody').appendChild(tr);
                 return;
             }
             const data = await res.json();
@@ -164,7 +171,14 @@
                 const contentType = res.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     const textError = await res.text();
-                    alert('Backend crashed and returned HTML instead of JSON: ' + textError.substring(0, 500));
+                    const td = document.createElement('td');
+                    td.colSpan = 5;
+                    td.className = 'text-red-500 p-4 font-mono text-xs whitespace-pre-wrap';
+                    td.textContent = 'Backend crashed and returned HTML instead of JSON:\n\n' + textError.substring(0, 1000);
+                    const tr = document.createElement('tr');
+                    tr.appendChild(td);
+                    document.getElementById('licenseTableBody').innerHTML = '';
+                    document.getElementById('licenseTableBody').appendChild(tr);
                     return;
                 }
 
