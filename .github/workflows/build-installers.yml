@@ -43,6 +43,8 @@ jobs:
         run: npm install
 
       - name: Build Application
+        env:
+          VITE_LICENSE_SERVER_URL: https://research-desk-pro.onrender.com
         run: npm run build
 
       - name: Rebuild native modules for x64 (Intel cross-compile)
