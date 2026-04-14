@@ -101,6 +101,12 @@
                 headers: { 'x-admin-key': adminKey }
             });
             if (!requireAuth(res)) return;
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const textError = await res.text();
+                document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4">Server Crashed (HTML returned): ${textError.substring(0, 200)}</td></tr>`;
+                return;
+            }
             const data = await res.json();
             if(!res.ok || !data.success) {
                 document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4">Server Error: ${data.error || 'Unknown'}</td></tr>`;
@@ -154,6 +160,13 @@
                 });
                 
                 if (!requireAuth(res)) return;
+
+                const contentType = res.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const textError = await res.text();
+                    alert('Backend crashed and returned HTML instead of JSON: ' + textError.substring(0, 500));
+                    return;
+                }
 
                 const data = await res.json();
                 if (!res.ok || !data.success) {

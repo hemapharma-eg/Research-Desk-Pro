@@ -6,8 +6,12 @@ require('dotenv').config();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false // Required for Supabase / most cloud databases
+    rejectUnauthorized: false
   }
+});
+
+pool.on('error', (err, client) => {
+  console.error('Unexpected error on idle client', err);
 });
 
 async function initDb() {
