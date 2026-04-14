@@ -5,6 +5,8 @@ require('dotenv').config();
 // For local development, you can set DATABASE_URL in a .env file
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 10000,
   ssl: {
     rejectUnauthorized: false
   }
