@@ -170,7 +170,7 @@
 
                 const data = await res.json();
                 if (!res.ok || !data.success) {
-                    alert('Backend rejected license generation: ' + (data.error || data.message || 'Unknown error'));
+                    document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4 font-mono text-xs whitespace-pre-wrap">Backend rejected license generation:<br><br>Error: ${data.error || data.message || 'Unknown error'}<br><br>Stack:<br>${data.stack || 'No stack'}</td></tr>`;
                     return;
                 }
 
@@ -178,7 +178,7 @@
                 document.getElementById('addForm').reset();
                 fetchLicenses();
             } catch(err) {
-                alert('CRITICAL FRONTEND ERROR: ' + err.message);
+                document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4 font-mono text-xs whitespace-pre-wrap">CRITICAL FRONTEND ERROR: ${err.message}</td></tr>`;
             }
         }
 
