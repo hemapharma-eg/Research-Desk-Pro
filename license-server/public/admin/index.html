@@ -96,14 +96,20 @@
         }
 
         async function fetchLicenses() {
+          try {
             const res = await fetch('/api/admin/licenses', {
                 headers: { 'x-admin-key': adminKey }
             });
             if (!requireAuth(res)) return;
             const data = await res.json();
+            if(!res.ok || !data.success) {
+                document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4">Server Error: ${data.error || 'Unknown'}</td></tr>`;
+                return;
+            }
             const tbody = document.getElementById('licenseTableBody');
             tbody.innerHTML = '';
             
+            if(!data.licenses) return;
             data.licenses.forEach(lic => {
                 const statusColor = lic.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
                 tbody.innerHTML += `
@@ -129,30 +135,38 @@
                     </tr>
                 `;
             });
+          } catch (err) {
+              document.getElementById('licenseTableBody').innerHTML = `<tr><td colspan="5" class="text-red-500 p-4">CRITICAL FRONTEND ERROR: ${err.message}</td></tr>`;
+          }
         }
 
         async function generateLicense(e) {
             e.preventDefault();
-            const name = document.getElementById('custName').value;
-            const email = document.getElementById('custEmail').value;
-            const org = document.getElementById('custOrg').value;
+            try {
+                const name = document.getElementById('custName').value;
+                const email = document.getElementById('custEmail').value;
+                const org = document.getElementById('custOrg').value;
 
-            const res = await fetch('/api/admin/licenses', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                body: JSON.stringify({ customerName: name, customerEmail: email, organization: org })
-            });
-            if (!requireAuth(res)) return;
+                const res = await fetch('/api/admin/licenses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ customerName: name, customerEmail: email, organization: org })
+                });
+                
+                if (!requireAuth(res)) return;
 
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                alert('Error generating license: ' + (data.error || data.message || 'Unknown error'));
-                return;
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert('Backend rejected license generation: ' + (data.error || data.message || 'Unknown error'));
+                    return;
+                }
+
+                document.getElementById('addModal').classList.add('hidden');
+                document.getElementById('addForm').reset();
+                fetchLicenses();
+            } catch(err) {
+                alert('CRITICAL FRONTEND ERROR: ' + err.message);
             }
-
-            document.getElementById('addModal').classList.add('hidden');
-            document.getElementById('addForm').reset();
-            fetchLicenses();
         }
 
         async function revoke(id) {
