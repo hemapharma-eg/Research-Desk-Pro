@@ -204,14 +204,14 @@ app.get('/api/admin/licenses', async (req, res) => {
 
 // GENERATE LICENSE
 app.post('/api/admin/licenses', async (req, res) => {
-  const { customerName, customerEmail, organization, tier, maxSeats } = req.body;
-  const id = uuidv4();
-  // Generate something like RDP-XXXX-XXXX-XXXX
-  const key = 'RDP-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
-               Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
-               Math.random().toString(36).substring(2, 6).toUpperCase();
-               
   try {
+    const { customerName, customerEmail, organization, tier, maxSeats } = req.body || {};
+    const id = uuidv4();
+    // Generate something like RDP-XXXX-XXXX-XXXX
+    const key = 'RDP-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
+                 Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
+                 Math.random().toString(36).substring(2, 6).toUpperCase();
+                 
     await db.run(`
       INSERT INTO licenses (id, license_key, customer_name, customer_email, organization, tier, max_seats)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -220,7 +220,7 @@ app.post('/api/admin/licenses', async (req, res) => {
     const newLic = await db.get('SELECT * FROM licenses WHERE id = ?', [id]);
     res.json({ success: true, license: newLic });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message, stack: err.stack });
   }
 });
 
