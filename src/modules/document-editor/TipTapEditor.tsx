@@ -49,6 +49,7 @@ import { AcademicTemplates } from './templates';
 import { useLicense } from '../licensing/LicenseContext';
 import { DemoLimitDialog } from '../licensing/components/DemoLimitDialog';
 import { setCitationStyle } from '../../utils/citationStyleStore';
+import { initCitationStyles } from '../../utils/citationStyles';
 import './TipTapStyles.css';
 
 interface TipTapEditorProps {
@@ -205,7 +206,9 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
           setPageSettings(parsed);
           pageSettingsRef.current = parsed;
           if (parsed.citationStyle) {
-            setCitationStyle(parsed.citationStyle);
+            initCitationStyles().then(() => {
+              setCitationStyle(parsed.citationStyle!);
+            });
           }
           cleanContent = cleanContent.replace(matchSettings[0], '');
         } catch(e) {}
