@@ -48,6 +48,7 @@ import { InsertReferenceModal } from './components/InsertReferenceModal';
 import { AcademicTemplates } from './templates';
 import { useLicense } from '../licensing/LicenseContext';
 import { DemoLimitDialog } from '../licensing/components/DemoLimitDialog';
+import { setCitationStyle } from '../../utils/citationStyleStore';
 import './TipTapStyles.css';
 
 interface TipTapEditorProps {
@@ -203,6 +204,9 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
           const parsed = JSON.parse(matchSettings[1].replace(/&quot;/g, '"'));
           setPageSettings(parsed);
           pageSettingsRef.current = parsed;
+          if (parsed.citationStyle) {
+            setCitationStyle(parsed.citationStyle);
+          }
           cleanContent = cleanContent.replace(matchSettings[0], '');
         } catch(e) {}
       }
