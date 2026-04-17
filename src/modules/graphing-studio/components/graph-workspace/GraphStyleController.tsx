@@ -137,6 +137,38 @@ export function GraphStyleController({ options, groupNames = [], onChange }: Gra
             </div>
 
             <div className="gs-panel-section">
+              <div className="gs-panel-title">Graph Orientation</div>
+              <div className="gs-form-group">
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={`gs-btn gs-btn-sm ${options.graphOrientation === 'landscape' ? '' : ''}`}
+                    style={{ 
+                      flex: 1, padding: '8px',
+                      background: options.graphOrientation === 'landscape' ? 'var(--color-accent-primary)' : 'var(--color-bg-surface)',
+                      color: options.graphOrientation === 'landscape' ? '#fff' : 'var(--color-text-primary)',
+                      border: options.graphOrientation === 'landscape' ? '2px solid var(--color-accent-primary)' : '1px solid var(--color-border-light)',
+                    }}
+                    onClick={() => update({ graphOrientation: 'landscape' })}
+                  >
+                    ▬ Landscape
+                  </button>
+                  <button
+                    className={`gs-btn gs-btn-sm`}
+                    style={{ 
+                      flex: 1, padding: '8px',
+                      background: options.graphOrientation === 'portrait' ? 'var(--color-accent-primary)' : 'var(--color-bg-surface)',
+                      color: options.graphOrientation === 'portrait' ? '#fff' : 'var(--color-text-primary)',
+                      border: options.graphOrientation === 'portrait' ? '2px solid var(--color-accent-primary)' : '1px solid var(--color-border-light)',
+                    }}
+                    onClick={() => update({ graphOrientation: 'portrait' })}
+                  >
+                    ▮ Portrait
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="gs-panel-section">
               <div className="gs-panel-title">Titles</div>
               <div className="gs-form-group">
                 <label className="gs-label">Graph Title</label>

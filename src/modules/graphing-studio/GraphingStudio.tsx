@@ -25,7 +25,6 @@ const TABS: { id: StudioTab; label: string; icon: string }[] = [
   { id: 'graph', label: 'Graph', icon: '📈' },
   { id: 'annotate', label: 'Annotate', icon: '✏️' },
   { id: 'report', label: 'Report', icon: '📄' },
-  { id: 'assembler', label: 'Assembler', icon: '🧩' },
   { id: 'export', label: 'Export', icon: '💾' },
 ];
 
@@ -35,6 +34,7 @@ function GraphingStudioContent() {
   const chartRef = useRef<HTMLDivElement>(null);
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [showMasterAssembler, setShowMasterAssembler] = useState(false);
 
   // Mark as unsaved on edit
   useEffect(() => {
@@ -66,11 +66,56 @@ function GraphingStudioContent() {
     );
   }
 
+  // Show master-level assembler
+  if (showMasterAssembler) {
+    return (
+      <div className="gs-container">
+        <div className="gs-topbar">
+          <span className="gs-topbar-title">
+            Graphing<span className="gs-topbar-dot">.</span>Studio
+          </span>
+          <div className="gs-topbar-divider" />
+          <span style={{ fontSize: 'var(--font-size-md)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-accent-primary)' }}>
+            🧩 Figure Assembler
+          </span>
+          <div className="gs-topbar-actions">
+            <button
+              className="gs-btn gs-btn-sm"
+              onClick={() => setShowMasterAssembler(false)}
+            >
+              ← Back
+            </button>
+          </div>
+        </div>
+        <div className="gs-workspace" style={{ padding: '24px', overflow: 'auto' }}>
+          <FigureAssembler />
+        </div>
+      </div>
+    );
+  }
+
   // Show dashboard if no dataset is active
   if (state.showDashboard || !state.dataset) {
     return (
       <div className="gs-container">
-        <ProjectDashboard />
+        <div className="gs-topbar">
+          <span className="gs-topbar-title">
+            Graphing<span className="gs-topbar-dot">.</span>Studio
+          </span>
+          <div className="gs-topbar-divider" />
+          <div className="gs-topbar-actions">
+            <button
+              className="gs-btn gs-btn-sm"
+              style={{ background: 'var(--color-accent-primary)', color: 'white', border: '1px solid var(--color-accent-primary)' }}
+              onClick={() => setShowMasterAssembler(true)}
+            >
+              🧩 Figure Assembler
+            </button>
+          </div>
+        </div>
+        <div className="gs-workspace">
+          <ProjectDashboard />
+        </div>
       </div>
     );
   }
@@ -154,7 +199,10 @@ function GraphingStudioContent() {
           </div>
         );
 
-      case 'graph':
+      case 'graph': {
+        const isPortrait = state.options.graphOrientation === 'portrait';
+        const graphW = isPortrait ? '520px' : '820px';
+        const graphH = isPortrait ? '820px' : '520px';
         return (
           <div className="gs-split-h" style={{ flex: 1 }}>
             {/* Center: Graph preview */}
@@ -162,7 +210,7 @@ function GraphingStudioContent() {
               <div
                 ref={chartRef}
                 className="gs-graph-paper"
-                style={{ width: '820px', maxWidth: '100%', height: '520px' }}
+                style={{ width: graphW, maxWidth: '100%', height: graphH }}
               >
                 <AdvancedGraphViewer
                   dataset={dataset}
@@ -189,15 +237,19 @@ function GraphingStudioContent() {
             </div>
           </div>
         );
+      }
 
-      case 'annotate':
+      case 'annotate': {
+        const isPortraitA = state.options.graphOrientation === 'portrait';
+        const graphWA = isPortraitA ? '520px' : '820px';
+        const graphHA = isPortraitA ? '820px' : '520px';
         return (
           <div className="gs-split-h" style={{ flex: 1 }}>
             <div className="gs-graph-area">
               <div
                 ref={chartRef}
                 className="gs-graph-paper"
-                style={{ width: '820px', maxWidth: '100%', height: '520px' }}
+                style={{ width: graphWA, maxWidth: '100%', height: graphHA }}
               >
                 <AdvancedGraphViewer
                   dataset={dataset}
@@ -295,6 +347,7 @@ function GraphingStudioContent() {
             </div>
           </div>
         );
+      }
 
       case 'report':
         return (
@@ -307,21 +360,17 @@ function GraphingStudioContent() {
           </div>
         );
 
-      case 'assembler':
-        return (
-          <div className="gs-workspace-scroll" style={{ padding: '24px' }}>
-            <FigureAssembler />
-          </div>
-        );
-
-      case 'export':
+      case 'export': {
+        const isPortraitE = state.options.graphOrientation === 'portrait';
+        const graphWE = isPortraitE ? '520px' : '820px';
+        const graphHE = isPortraitE ? '820px' : '520px';
         return (
           <div className="gs-split-h" style={{ flex: 1 }}>
             <div className="gs-graph-area">
               <div
                 ref={chartRef}
                 className="gs-graph-paper"
-                style={{ width: '820px', maxWidth: '100%', height: '520px' }}
+                style={{ width: graphWE, maxWidth: '100%', height: graphHE }}
               >
                 <AdvancedGraphViewer
                   dataset={dataset}
@@ -346,6 +395,7 @@ function GraphingStudioContent() {
             </div>
           </div>
         );
+      }
 
       default:
         return null;
@@ -386,6 +436,14 @@ function GraphingStudioContent() {
           )}
           <button className="gs-btn gs-btn-sm" onClick={() => { saveDataset(); }} title="Force Save" disabled={saveStatus === 'saving' || saveStatus === 'saved'}>
             💾 Save
+          </button>
+          <button
+            className="gs-btn gs-btn-sm"
+            style={{ background: 'var(--color-accent-primary)', color: 'white', border: '1px solid var(--color-accent-primary)' }}
+            onClick={() => setShowMasterAssembler(true)}
+            title="Open Figure Assembler"
+          >
+            🧩 Assembler
           </button>
           <button
             className="gs-btn gs-btn-sm"

@@ -11,13 +11,14 @@ import type { TbTableRow } from '../../../types/electron.d';
 // ────── Node View Component ──────
 
 interface TableEmbedViewProps {
-  node: { attrs: { tableId: string; caption: string; showFootnotes: boolean } };
+  node: { attrs: { tableId: string; caption: string; showFootnotes: boolean; tableFontFamily: string; tableFontSize: string } };
   updateAttributes: (attrs: Record<string, unknown>) => void;
   deleteNode: () => void;
+  selected: boolean;
 }
 
-function TableEmbedView({ node, deleteNode }: TableEmbedViewProps) {
-  const { tableId, caption, showFootnotes } = node.attrs;
+function TableEmbedView({ node, deleteNode, updateAttributes, selected }: TableEmbedViewProps) {
+  const { tableId, caption, showFootnotes, tableFontFamily, tableFontSize } = node.attrs;
   const [table, setTable] = useState<TbTableRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +44,9 @@ function TableEmbedView({ node, deleteNode }: TableEmbedViewProps) {
     })();
   }, [tableId]);
 
+  const fontFamily = tableFontFamily || 'Inter, sans-serif';
+  const fontSize = tableFontSize || '12px';
+
   // Render the table data as an HTML table
   const renderTable = () => {
     if (!table) return null;
@@ -55,20 +59,20 @@ function TableEmbedView({ node, deleteNode }: TableEmbedViewProps) {
       <div className="tb-embed-table-wrapper">
         {/* Caption */}
         {(caption || table.caption || table.title) && (
-          <div className="tb-embed-caption">
+          <div className="tb-embed-caption" style={{ fontFamily, fontSize }}>
             {table.table_number && <strong>{table.table_number}. </strong>}
             {caption || table.caption || table.title}
           </div>
         )}
 
         {/* Table */}
-        <table className="tb-embed-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'var(--font-family-mono, monospace)' }}>
+        <table className="tb-embed-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize, fontFamily }}>
           <thead>
             <tr>
               {columns.map(col => (
                 <th key={col.id} style={{ 
                   borderBottom: '2px solid #333', padding: '6px 8px', textAlign: 'left',
-                  fontWeight: 'bold', fontSize: '11px', whiteSpace: 'nowrap'
+                  fontWeight: 'bold', fontSize, fontFamily, whiteSpace: 'nowrap'
                 }}>
                   {col.label}
                 </th>
@@ -79,7 +83,7 @@ function TableEmbedView({ node, deleteNode }: TableEmbedViewProps) {
             {rows.map((row, ri) => (
               <tr key={row.id} style={{ borderBottom: ri === rows.length - 1 ? '2px solid #333' : '1px solid #e2e8f0' }}>
                 {columns.map(col => (
-                  <td key={col.id} style={{ padding: '4px 8px', fontSize: '12px' }}>
+                  <td key={col.id} style={{ padding: '4px 8px', fontSize, fontFamily }}>
                     {row.cells?.[col.id]?.displayValue ?? ''}
                   </td>
                 ))}
@@ -90,24 +94,26 @@ function TableEmbedView({ node, deleteNode }: TableEmbedViewProps) {
 
         {/* Footnotes */}
         {footnotes.length > 0 && (
-          <div style={{ marginTop: '4px', fontSize: '10px', color: '#64748b' }}>
+          <div style={{ marginTop: '4px', fontSize: `calc(${fontSize} * 0.85)`, color: '#64748b', fontFamily }}>
             {footnotes.map(fn => (
               <div key={fn.id}><sup>{fn.marker}</sup> {fn.text}</div>
             ))}
           </div>
         )}
 
-        {/* Link indicator */}
-        <div style={{ 
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginTop: '4px', fontSize: '10px', color: '#94a3b8'
-        }}>
-          <span>🔗 Linked Table: {table.name}</span>
-          <span>Last updated: {new Date(table.updated_at).toLocaleDateString()}</span>
-        </div>
       </div>
     );
   };
+
+  const FONT_FAMILIES = [
+    'Inter', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia',
+    'Garamond', 'Palatino', 'Book Antiqua', 'Tahoma', 'Verdana',
+    'Trebuchet MS', 'Courier New', 'monospace'
+  ];
+
+  const FONT_SIZES = [
+    '8px', '9px', '10px', '11px', '12px', '14px', '16px', '18px', '20px', '24px'
+  ];
 
   return (
     <NodeViewWrapper className="tb-embed-node" contentEditable={false}>
@@ -133,6 +139,38 @@ function TableEmbedView({ node, deleteNode }: TableEmbedViewProps) {
         >
           ×
         </button>
+
+        {/* Font formatting bar when selected */}
+        {selected && (
+          <div className="print-hidden" style={{
+            position: 'absolute', top: '-40px', right: '0',
+            display: 'flex', gap: '8px', alignItems: 'center',
+            padding: '6px 8px', background: 'var(--color-bg-app)',
+            border: '1px solid var(--color-border-strong)',
+            borderRadius: '6px', fontSize: '11px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 10,
+          }}>
+            <span style={{ fontWeight: 'bold', color: 'var(--color-text-secondary)' }}>Font:</span>
+            <select
+              value={fontFamily}
+              onChange={e => updateAttributes({ tableFontFamily: e.target.value })}
+              style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--color-border-light)', fontSize: '11px', cursor: 'pointer', background: 'var(--color-bg-surface)' }}
+            >
+              {FONT_FAMILIES.map(f => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            <select
+              value={fontSize}
+              onChange={e => updateAttributes({ tableFontSize: e.target.value })}
+              style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--color-border-light)', fontSize: '11px', cursor: 'pointer', background: 'var(--color-bg-surface)' }}
+            >
+              {FONT_SIZES.map(s => (
+                <option key={s} value={s}>{parseInt(s)}pt</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {loading && (
           <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>
@@ -168,6 +206,8 @@ export const TableBuilderEmbedNode = Node.create({
       tableId: { default: '' },
       caption: { default: '' },
       showFootnotes: { default: true },
+      tableFontFamily: { default: 'Inter, sans-serif' },
+      tableFontSize: { default: '12px' },
     };
   },
 

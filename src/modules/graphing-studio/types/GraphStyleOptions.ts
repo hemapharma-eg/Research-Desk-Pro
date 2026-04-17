@@ -81,6 +81,9 @@ export interface GraphStyleOptions {
   // Background
   backgroundColor: string;
   frameVisible: boolean;
+
+  // Orientation
+  graphOrientation: 'landscape' | 'portrait';
 }
 
 export const DEFAULT_STYLE_OPTIONS: GraphStyleOptions = {
@@ -126,4 +129,5 @@ export const DEFAULT_STYLE_OPTIONS: GraphStyleOptions = {
   titleFontSize: 16,
   backgroundColor: '#FFFFFF',
   frameVisible: true,
+  graphOrientation: 'landscape',
 };

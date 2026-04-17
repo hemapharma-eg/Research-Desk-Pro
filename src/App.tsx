@@ -8,6 +8,7 @@ import { PowerAnalysis } from './modules/power-analysis/PowerAnalysis';
 import { SystematicReviewStudio } from './modules/systematic-review/SystematicReviewStudio';
 import { TableBuilder } from './modules/table-builder/TableBuilder';
 import { IntegrityCheckerHome } from './modules/integrity-checker/IntegrityCheckerHome';
+import { HelpGuide } from './components/HelpGuide';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 import { LicenseProvider } from './modules/licensing/LicenseContext';
 import { AppAccessController } from './modules/licensing/screens/AppAccessController';
@@ -28,6 +29,7 @@ const MODULES = [
 
 function AppContent() {
   const [activeModule, setActiveModule] = useState('dashboard');
+  const [showHelp, setShowHelp] = useState(false);
   const { currentProject } = useProject();
 
   const handleSendToTableBuilder = useCallback((e: Event) => {
@@ -49,9 +51,20 @@ function AppContent() {
   useEffect(() => {
     window.addEventListener('send-to-table-builder', handleSendToTableBuilder);
     window.addEventListener('navigate-to-module', handleNavigateToModule);
+    
+    // Cmd/Ctrl + / to open help
+    const handleHelpShortcut = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setShowHelp(prev => !prev);
+      }
+    };
+    document.addEventListener('keydown', handleHelpShortcut);
+    
     return () => {
       window.removeEventListener('send-to-table-builder', handleSendToTableBuilder);
       window.removeEventListener('navigate-to-module', handleNavigateToModule);
+      document.removeEventListener('keydown', handleHelpShortcut);
     };
   }, [handleSendToTableBuilder, handleNavigateToModule]);
 
@@ -116,8 +129,24 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Status Widget */}
-        <StatusWidget />
+        {/* Status Widget + Help */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <button
+            onClick={() => setShowHelp(true)}
+            title={`Help (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+/)`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              padding: '4px 12px', fontSize: 'var(--font-size-sm)',
+              background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-light)',
+              borderRadius: 'var(--radius-md)', cursor: 'pointer',
+              color: 'var(--color-text-secondary)', fontWeight: 'var(--font-weight-medium)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            ❓ Help
+          </button>
+          <StatusWidget />
+        </div>
       </header>
 
       {/* ─── Horizontal Module Tab Navigation ─── */}
@@ -160,6 +189,9 @@ function AppContent() {
           {renderModuleContent()}
         </div>
       </main>
+
+      {/* Help Guide Modal */}
+      <HelpGuide isOpen={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 }

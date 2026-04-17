@@ -44,6 +44,7 @@ import { FindReplacePanel } from './components/FindReplacePanel';
 import { PaginationPanel } from './components/PaginationPanel';
 import { CitationPreferences } from './components/CitationPreferences';
 import { InsertFigureModal } from './components/InsertFigureModal';
+import { InsertReferenceModal } from './components/InsertReferenceModal';
 import { AcademicTemplates } from './templates';
 import { useLicense } from '../licensing/LicenseContext';
 import { DemoLimitDialog } from '../licensing/components/DemoLimitDialog';
@@ -63,12 +64,18 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
   const [showPaginationPanel, setShowPaginationPanel] = useState(false);
   const [showCitationPrefs, setShowCitationPrefs] = useState(false);
   const [showFigureModal, setShowFigureModal] = useState(false);
+  const [showRefModal, setShowRefModal] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showTrackChanges, setShowTrackChanges] = useState(false);
   const [showLinkedObjects, setShowLinkedObjects] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [selectedWordCount, setSelectedWordCount] = useState<number | null>(null);
+  const [selectedCharCount, setSelectedCharCount] = useState<number | null>(null);
+  const [totalWordCount, setTotalWordCount] = useState<number>(0);
+  const [totalCharCount, setTotalCharCount] = useState<number>(0);
   
   const { entitlements, trackUsage } = useLicense();
   const [showLimitDialog, setShowLimitDialog] = useState(false);
@@ -142,6 +149,19 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
       const settingsStr = JSON.stringify(pageSettingsRef.current).replace(/"/g, '&quot;');
       const commentsStr = JSON.stringify(commentsRef.current).replace(/"/g, '&quot;');
       onChange(html + `<div id="page-settings" data-settings="${settingsStr}"></div><div id="comment-settings" data-comments="${commentsStr}"></div>`);
+      
+      setTotalWordCount(editor.storage.characterCount.words());
+      setTotalCharCount(editor.storage.characterCount.characters());
+      
+      const { empty, from, to } = editor.state.selection;
+      if (empty) {
+        setSelectedWordCount(null);
+        setSelectedCharCount(null);
+      } else {
+        const text = editor.state.doc.textBetween(from, to, ' ');
+        setSelectedCharCount(text.length);
+        setSelectedWordCount(text.trim().split(/\s+/).filter(w => w.length > 0).length);
+      }
     },
     onSelectionUpdate: ({ editor }) => {
       // Find comment ID in current selection
@@ -151,10 +171,20 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         if (attrs.commentId) {
           setActiveCommentId(attrs.commentId);
           setShowComments(true);
-          return;
         }
+      } else {
+        setActiveCommentId(null);
       }
-      setActiveCommentId(null);
+      
+      const { empty, from, to } = editor.state.selection;
+      if (empty) {
+        setSelectedWordCount(null);
+        setSelectedCharCount(null);
+      } else {
+        const text = editor.state.doc.textBetween(from, to, ' ');
+        setSelectedCharCount(text.length);
+        setSelectedWordCount(text.trim().split(/\s+/).filter(w => w.length > 0).length);
+      }
     }
   });
 
@@ -189,6 +219,11 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
       
       if (cleanContent !== editor.getHTML()) {
         editor.commands.setContent(cleanContent);
+        setTotalWordCount(editor.storage.characterCount.words());
+        setTotalCharCount(editor.storage.characterCount.characters());
+      } else {
+        setTotalWordCount(editor.storage.characterCount.words());
+        setTotalCharCount(editor.storage.characterCount.characters());
       }
     }
   }, [content, editor]);
@@ -289,12 +324,17 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         e.preventDefault();
         setShowFindReplace(true);
       }
+      // Cmd/Ctrl + Shift + R: Insert Reference
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        setShowRefModal(true);
+      }
     };
 
     const handleInsertGraph = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail && customEvent.detail.type === 'image' && customEvent.detail.src && editor) {
-        editor.chain().focus().setImage({ src: customEvent.detail.src, alt: customEvent.detail.caption, width: '600px' }).run();
+        editor.chain().focus().setImage({ src: customEvent.detail.src, alt: customEvent.detail.caption, width: '100%' }).run();
       }
     };
 
@@ -373,14 +413,11 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         <select
           onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
           value={editor.getAttributes('textStyle').fontSize || '16px'}
-          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'var(--color-bg-app)' }}
+          style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'var(--color-bg-app)', minWidth: '70px' }}
         >
-          <option value="12px">12pt</option>
-          <option value="14px">14pt</option>
-          <option value="16px">16pt (Default)</option>
-          <option value="18px">18pt</option>
-          <option value="20px">20pt</option>
-          <option value="24px">24pt</option>
+          {[8,9,10,11,12,14,16,18,20,22,24,26,28,30,32,36,40,44,48,54,60,66,72].map(s => (
+            <option key={s} value={`${s}px`}>{s}pt{s === 16 ? ' (Default)' : ''}</option>
+          ))}
         </select>
         
         <div style={{ width: '1px', background: 'var(--color-border-light)', margin: '0 var(--space-2)' }}></div>
@@ -676,6 +713,13 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
           📎 Endnote
         </button>
         <button
+          onClick={() => setShowRefModal(true)}
+          style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-accent-primary)', cursor: 'pointer', background: 'transparent', color: 'var(--color-accent-primary)', fontWeight: 'bold' }}
+          title={`Insert Reference (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Shift+R)`}
+        >
+          📚 Reference
+        </button>
+        <button
           onClick={() => editor.chain().focus().insertCaption('Figure').run()}
           style={{ padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', cursor: 'pointer', background: 'transparent' }}
           title="Insert Figure Caption"
@@ -865,7 +909,7 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         )}
 
         <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 'var(--space-8)', display: 'flex', flexDirection: 'column', backgroundColor: '#e5e7eb' }}>
-          <div className="tiptap-page-container">
+          <div className="tiptap-page-container" style={{ zoom: `${zoomLevel}%` }}>
             {(pageSettings.headerText || (pageSettings.pageNumberPosition !== 'none' && pageSettings.pageNumberPosition.includes('top'))) && (
                <div style={{ 
                   padding: '0 25.4mm 16px', color: 'var(--color-text-tertiary)', fontSize: '12px', 
@@ -905,7 +949,7 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
             onClose={() => setShowFigureModal(false)}
             onInsert={(figure) => {
               if (figure.thumbnail_dataurl) {
-                editor.chain().focus().setImage({ src: figure.thumbnail_dataurl, alt: figure.name, width: '600px' }).run();
+                editor.chain().focus().setImage({ src: figure.thumbnail_dataurl, alt: figure.name, width: '100%' }).run();
               } else {
                 alert('This figure does not have a preview image.');
               }
@@ -950,12 +994,41 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         fontSize: 'var(--font-size-sm)', 
         color: 'var(--color-text-tertiary)',
         display: 'flex',
-        justifyContent: 'flex-end',
-        gap: 'var(--space-4)',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         backgroundColor: 'var(--color-bg-sidebar)'
       }}>
-        <span>{editor.storage.characterCount.words()} words</span>
-        <span>{editor.storage.characterCount.characters()} characters</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button 
+            onClick={() => setZoomLevel(Math.max(50, zoomLevel - 10))}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--color-text-tertiary)' }}
+            title="Zoom Out"
+          >
+            ➖
+          </button>
+          <span style={{ minWidth: '40px', textAlign: 'center', fontWeight: 'bold' }}>{zoomLevel}%</span>
+          <button 
+            onClick={() => setZoomLevel(Math.min(200, zoomLevel + 10))}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--color-text-tertiary)' }}
+            title="Zoom In"
+          >
+            ➕
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
+          {(() => {
+            const hasSelection = selectedWordCount !== null;
+            const displayWords = hasSelection ? selectedWordCount : totalWordCount;
+            const displayChars = hasSelection ? selectedCharCount : totalCharCount;
+            
+            return (
+              <>
+                <span>{displayWords} {displayWords === 1 ? 'word' : 'words'} {hasSelection && '(selected)'}</span>
+                <span>{displayChars} {displayChars === 1 ? 'character' : 'characters'} {hasSelection && '(selected)'}</span>
+              </>
+            );
+          })()}
+        </div>
       </div>
       
       <DemoLimitDialog
@@ -965,6 +1038,20 @@ export function TipTapEditor({ documentTitle, content, onChange, documentId }: T
         message="A watermark has been added to your exported document because you are using the Demo Version. To remove the watermark, please activate your license."
         onActivate={() => window.dispatchEvent(new CustomEvent('TRIGGER_ACTIVATION'))}
       />
+
+      {showRefModal && (
+        <InsertReferenceModal
+          onClose={() => setShowRefModal(false)}
+          onInsert={(refs) => {
+             const combinedId = refs.map(r => r.id).join(',');
+             const combinedLabel = refs.map(r => `${r.authors?.split(',')[0]} et al., ${r.year}`).join('; ');
+             editor.chain().focus().insertContent({
+               type: 'citation',
+               attrs: { id: combinedId, label: combinedLabel }
+             }).insertContent(' ').run();
+          }}
+        />
+      )}
     </div>
   );
 }

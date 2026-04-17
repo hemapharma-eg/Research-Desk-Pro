@@ -78,6 +78,69 @@ function changeDpiDataUrl(base64Image: string, dpi: number): string {
   return mime + ',' + btoa(newBstr);
 }
 
+/**
+ * Auto-trim whitespace from a canvas by scanning edge pixels.
+ */
+function trimCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  
+  const { width, height } = canvas;
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const { data } = imageData;
+  
+  let top = 0, bottom = height - 1, left = 0, right = width - 1;
+  const threshold = 250; // near-white threshold
+  
+  const isWhitePixel = (x: number, y: number) => {
+    const idx = (y * width + x) * 4;
+    return data[idx] >= threshold && data[idx + 1] >= threshold && data[idx + 2] >= threshold;
+  };
+  
+  // Find top
+  topLoop: for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!isWhitePixel(x, y)) { top = y; break topLoop; }
+    }
+  }
+  // Find bottom
+  bottomLoop: for (let y = height - 1; y >= 0; y--) {
+    for (let x = 0; x < width; x++) {
+      if (!isWhitePixel(x, y)) { bottom = y; break bottomLoop; }
+    }
+  }
+  // Find left
+  leftLoop: for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      if (!isWhitePixel(x, y)) { left = x; break leftLoop; }
+    }
+  }
+  // Find right
+  rightLoop: for (let x = width - 1; x >= 0; x--) {
+    for (let y = 0; y < height; y++) {
+      if (!isWhitePixel(x, y)) { right = x; break rightLoop; }
+    }
+  }
+  
+  const pad = 8;
+  const trimLeft = Math.max(0, left - pad);
+  const trimTop = Math.max(0, top - pad);
+  const trimRight = Math.min(width - 1, right + pad);
+  const trimBottom = Math.min(height - 1, bottom + pad);
+  const trimW = trimRight - trimLeft + 1;
+  const trimH = trimBottom - trimTop + 1;
+  
+  if (trimW <= 0 || trimH <= 0 || (trimW >= width && trimH >= height)) return canvas;
+  
+  const trimmed = document.createElement('canvas');
+  trimmed.width = trimW;
+  trimmed.height = trimH;
+  const tCtx = trimmed.getContext('2d');
+  if (!tCtx) return canvas;
+  tCtx.drawImage(canvas, trimLeft, trimTop, trimW, trimH, 0, 0, trimW, trimH);
+  return trimmed;
+}
+
 export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelProps) {
   const { entitlements, trackUsage } = useLicense();
   const [showLimitDialog, setShowLimitDialog] = useState(false);
@@ -107,7 +170,8 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
       }
       const scale = pixelsNeeded / currentScreenPx;
 
-      const canvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale });
+      const rawCanvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale });
+      const canvas = trimCanvas(rawCanvas);
       const rawDataUrl = canvas.toDataURL('image/png');
       const finalDataUrl = changeDpiDataUrl(rawDataUrl, dpi);
 
@@ -147,7 +211,8 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
   const handleCopyToClipboard = async () => {
     if (!chartRef.current) return;
     try {
-      const canvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale: 4 });
+      const rawCanvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale: 4 });
+      const canvas = trimCanvas(rawCanvas);
       canvas.toBlob(async blob => {
         if (blob) {
           const item = new ClipboardItem({ 'image/png': blob });
@@ -163,7 +228,8 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
   const handleInsertIntoDocument = async () => {
     if (!chartRef.current) return;
     try {
-      const canvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale: 4 });
+      const rawCanvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale: 4 });
+      const canvas = trimCanvas(rawCanvas);
       const dataUrl = canvas.toDataURL('image/png');
 
       // Save as figure in project
