@@ -587,7 +587,7 @@ export function FigureAssembler() {
                   }}
                 >
                   <div style={{ height: '120px', padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderBottom: '1px solid var(--color-border-light)' }}>
-                    <img src={fig.thumbnail_data_url} alt={fig.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    <img src={fig.thumbnail_dataurl || undefined} alt={fig.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   </div>
                   <div style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                     {fig.name}

@@ -35,3 +35,6 @@ test_*.js
 test_schema.sql
 *.txt
 0
+
+.env
+release/
