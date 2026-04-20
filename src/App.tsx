@@ -17,14 +17,14 @@ import { StatusWidget } from './modules/licensing/components/StatusWidget';
 import logoUrl from './assets/logo.png';
 
 const MODULES = [
-  { id: 'dashboard',         label: 'Dashboard',         icon: '◈' },
-  { id: 'reference-manager', label: 'References',        icon: '◉' },
-  { id: 'document-editor',   label: 'Editor',            icon: '◫' },
-  { id: 'graphing-studio',   label: 'Graphing',          icon: '△' },
-  { id: 'power-analysis',    label: 'Power Analysis',    icon: '⊕' },
-  { id: 'systematic-review', label: 'Systematic Review', icon: '◎' },
-  { id: 'table-builder',     label: 'Tables',            icon: '▦' },
-  { id: 'integrity-checker', label: 'Integrity',         icon: '◆' },
+  { id: 'dashboard',         label: 'Dashboard',         icon: '🏠', color: '#6366f1', rgb: '99, 102, 241' },
+  { id: 'reference-manager', label: 'References',        icon: '📚', color: '#10b981', rgb: '16, 185, 129' },
+  { id: 'document-editor',   label: 'Editor',            icon: '📝', color: '#0ea5e9', rgb: '14, 165, 233' },
+  { id: 'graphing-studio',   label: 'Graphing',          icon: '📈', color: '#8b5cf6', rgb: '139, 92, 246' },
+  { id: 'power-analysis',    label: 'Power Analysis',    icon: '⚡', color: '#f59e0b', rgb: '245, 158, 11' },
+  { id: 'systematic-review', label: 'Systematic Review', icon: '🔍', color: '#ec4899', rgb: '236, 72, 153' },
+  { id: 'table-builder',     label: 'Tables',            icon: '▦', color: '#14b8a6', rgb: '20, 184, 166' },
+  { id: 'integrity-checker', label: 'Integrity',         icon: '🛡️', color: '#ef4444', rgb: '239, 68, 68' },
 ];
 
 function AppContent() {
@@ -68,6 +68,8 @@ function AppContent() {
     };
   }, [handleSendToTableBuilder, handleNavigateToModule]);
 
+  const activeModuleData = MODULES.find(m => m.id === activeModule) || MODULES[0];
+
   const renderModuleContent = () => {
     switch (activeModule) {
       case 'dashboard':         return <Dashboard />;
@@ -88,7 +90,17 @@ function AppContent() {
   };
 
   return (
-    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--color-bg-app)' }}>
+    <div 
+      className="app-container" 
+      style={{ 
+        display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--color-bg-app)',
+        '--color-accent-primary': activeModuleData.color,
+        '--gradient-accent': `linear-gradient(135deg, ${activeModuleData.color}, var(--color-accent-secondary))`,
+        '--color-accent-glow': `rgba(${activeModuleData.rgb}, 0.18)`,
+        '--color-bg-active': `rgba(${activeModuleData.rgb}, 0.10)`,
+        '--color-bg-hover': `rgba(${activeModuleData.rgb}, 0.06)`,
+      } as React.CSSProperties}
+    >
       {/* Mac-native invisible drag region */}
       <div className="titlebar drarg-region" style={{ height: 'var(--titlebar-height)', width: '100%', flexShrink: 0 }}></div>
 
@@ -151,11 +163,15 @@ function AppContent() {
 
       {/* ─── Horizontal Module Tab Navigation ─── */}
       <nav className="module-nav print-hidden no-drag-region">
-        {MODULES.map(({ id, label, icon }) => (
+        {MODULES.map(({ id, label, icon, color, rgb }) => (
           <button
             key={id}
             className={`module-tab ${activeModule === id ? 'active' : ''}`}
             onClick={() => setActiveModule(id)}
+            style={activeModule === id ? undefined : {
+              '--color-hover-accent': color,
+              '--color-hover-bg': `rgba(${rgb}, 0.06)`,
+            } as React.CSSProperties}
           >
             <span className="tab-icon">{icon}</span>
             {label}

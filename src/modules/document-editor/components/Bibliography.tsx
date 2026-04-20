@@ -52,7 +52,13 @@ export function Bibliography({ editorJson, citationStyle = 'apa' }: Bibliography
       const res = await window.api.getReferences();
       if (res.success && res.data) {
         // Filter local DB to only references that were cited
-        const bibliography = res.data.filter(ref => ids.includes(ref.id));
+        const unsortedBibliography = res.data.filter(ref => ids.includes(ref.id));
+        
+        // Sort the bibliography exactly by the order of their first appearance in the document (the ids array)
+        // This ensures numeric styles (Vancouver, PLOS, etc.) assign numbers chronologically.
+        const bibliography = unsortedBibliography.sort((a, b) => {
+          return ids.indexOf(a.id) - ids.indexOf(b.id);
+        });
         
         try {
           const cslData = bibliography.map(ref => ref.raw_metadata ? JSON.parse(ref.raw_metadata) : null).filter(Boolean);

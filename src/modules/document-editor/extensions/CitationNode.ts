@@ -9,6 +9,14 @@ export const CitationNode = Mention.extend({
     return ReactNodeViewRenderer(CitationComponent);
   },
 
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-type="citation"]',
+      },
+    ];
+  },
+
   addAttributes() {
     return {
       id: {
@@ -33,6 +41,16 @@ export const CitationNode = Mention.extend({
           return {
             'data-label': attributes.label,
           };
+        },
+      },
+      // Stores the global citation indices as a JSON string, e.g. "[4,5]"
+      // Set by CaptionNumberingPlugin's appendTransaction, so it's always
+      // correct before React renders the NodeView.
+      citationIndices: {
+        default: '[]',
+        parseHTML: element => element.getAttribute('data-citation-indices') || '[]',
+        renderHTML: attributes => {
+          return { 'data-citation-indices': attributes.citationIndices || '[]' };
         },
       },
     };

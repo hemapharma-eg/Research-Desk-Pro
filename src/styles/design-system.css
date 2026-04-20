@@ -235,14 +235,14 @@ select {
 }
 
 .module-tab:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-hover);
+  color: var(--color-hover-accent, var(--color-text-primary));
+  background: var(--color-hover-bg, var(--color-bg-hover));
 }
 
 .module-tab.active {
   color: var(--color-accent-primary);
   background: var(--color-bg-active);
-  border-color: rgba(99, 102, 241, 0.15);
+  border-color: var(--color-accent-glow);
   box-shadow: var(--shadow-glow);
 }
 

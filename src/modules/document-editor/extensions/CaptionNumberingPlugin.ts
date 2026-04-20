@@ -1,7 +1,8 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
-// A generic plugin to auto-number captions
+// A generic plugin to auto-number captions, footnotes, endnotes.
+// Citation numbering is handled inside CitationComponent itself (via editor.on('update')).
 export const CaptionNumberingPlugin = Extension.create({
   name: 'captionNumbering',
 
@@ -24,7 +25,7 @@ export const CaptionNumberingPlugin = Extension.create({
           // Map to store the correct number for each caption ID
           const captionMap: Record<string, { labelType: string; number: number }> = {};
 
-          // Pass 1: Number the captions and build the map
+          // Pass 1: Number the captions and build the maps
           newState.doc.descendants((node, pos) => {
             if (node.type.name === 'caption') {
               const attrs = node.attrs;
