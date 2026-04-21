@@ -450,6 +450,9 @@ export function HelpGuide({ isOpen, onClose }: HelpGuideProps) {
                 <span>{section.title}</span>
               </div>
             ))}
+            <div style={{ marginTop: 'auto', padding: '16px', fontSize: '12px', color: '#666', borderTop: '1px solid #333', textAlign: 'center' }}>
+              &copy; 2026 ReseolabX.<br/>All rights reserved.
+            </div>
           </div>
 
           {/* Content */}
