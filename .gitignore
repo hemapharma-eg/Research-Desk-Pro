@@ -38,3 +38,6 @@ test_schema.sql
 
 .env
 release/
+
+dist-electron/
+scratch/
