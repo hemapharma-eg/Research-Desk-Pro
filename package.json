@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "commonjs",
   "scripts": {
+    "prebuild": "node scripts/generate-help.js",
+    "predev": "node scripts/generate-help.js",
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
     "build": "vite build && npm run copy:electron",
     "postinstall": "electron-builder install-app-deps",
