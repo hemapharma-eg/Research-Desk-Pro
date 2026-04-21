@@ -124,31 +124,27 @@ const ReviewContext = createContext<ReviewContextProps | undefined>(undefined);
 export function SystematicReviewProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reviewReducer, initialState);
 
-  // Load from localStorage on mount
+  // Load from SQLite on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('sr_app_state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') {
-          dispatch({ type: 'LOAD_STATE', payload: parsed });
+    async function fetchState() {
+      try {
+        const saved = await window.api.getMetadata('sr_app_state');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            dispatch({ type: 'LOAD_STATE', payload: parsed });
+          }
         }
+      } catch (e) {
+        console.warn('Failed to load Systematic Review state from database', e);
       }
-    } catch (e) {
-      console.warn('Failed to load Systematic Review state', e);
     }
+    fetchState();
   }, []);
 
-  // Save to localStorage on state change
-  useEffect(() => {
-    if (state.project) {
-      try {
-        localStorage.setItem('sr_app_state', JSON.stringify(state));
-      } catch (e) {
-        console.warn('Failed to save Systematic Review state', e);
-      }
-    }
-  }, [state]);
+  // Save mechanism is now completely manual to prevent enormous JSON payloads
+  // from locking the SQLite thread on every minor keystroke in references.
+  // The user triggers save explicitly via the top toolbar.
 
   const logEvent = (
     actionType: ActionType,

@@ -144,6 +144,24 @@ ipcMain.handle('project:getCurrent', async () => {
   return { success: true, path };
 });
 
+ipcMain.handle('db:getMetadata', async (event, key) => {
+  try {
+    return dbManager.getMetadata(key);
+  } catch (err) {
+    console.error('getMetadata error:', err);
+    return null;
+  }
+});
+
+ipcMain.handle('db:setMetadata', async (event, key, value) => {
+  try {
+    return dbManager.setMetadata(key, value);
+  } catch (err) {
+    console.error('setMetadata error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // --- References ---
 
 ipcMain.handle('reference:getAll', async () => {

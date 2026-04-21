@@ -107,10 +107,16 @@ function SystematicReviewContent() {
                 <span style={{fontSize: 10, opacity: 0.7}}>({state.activeReviewer.role})</span>
               </div>
             )}
-            <button className="sr-btn" onClick={() => {
+            <button className="sr-btn" onClick={async () => {
               if (state.project) {
-                localStorage.setItem('sr_app_state', JSON.stringify(state));
-                alert('Project saved successfully!');
+                try {
+                  const stateString = JSON.stringify(state);
+                  await window.api.setMetadata('sr_app_state', stateString);
+                  alert('Project Systematic Review data saved successfully to Database!');
+                } catch (e) {
+                  console.error(e);
+                  alert('Failed to save to database.');
+                }
               } else {
                 alert('No active project to save.');
               }

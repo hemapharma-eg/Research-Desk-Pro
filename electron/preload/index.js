@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('api', {
   createOrOpenProject: (path) => ipcRenderer.invoke('project:createOrOpen', path),
   closeProject: () => ipcRenderer.invoke('project:close'),
   getCurrentProject: () => ipcRenderer.invoke('project:getCurrent'),
+  getMetadata: (key) => ipcRenderer.invoke('db:getMetadata', key),
+  setMetadata: (key, value) => ipcRenderer.invoke('db:setMetadata', key, value),
   
   // References
   getReferences: () => ipcRenderer.invoke('reference:getAll'),
