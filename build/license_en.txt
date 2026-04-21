@@ -1,0 +1,70 @@
+# End User License Agreement (EULA)
+
+**Important – Read Carefully:** This End-User License Agreement ("EULA") is a legal agreement between you (either an individual or a single entity) and ReseolabX ("Licensor") for the software product accompanying this EULA, which includes computer software and may include associated media, printed materials, and "online" or electronic documentation ("Software Product"). 
+
+By installing, copying, or otherwise using the Software Product, you agree to be bound by the terms of this EULA. If you do not agree to the terms of this EULA, do not install or use the Software Product.
+
+## 1. Grant of License
+The Licensor grants you a non-exclusive, non-transferable license to use the Software Product, provided you comply with all terms and conditions of this EULA. This Software is licensed, not sold.
+
+## 2. Description of Other Rights and Limitations
+- **Limitations on Reverse Engineering, Decompilation. and Disassembly:** You may not reverse engineer, decompile, or disassemble the Software Product, except and only to the extent that such activity is expressly permitted by applicable law notwithstanding this limitation.
+- **Separation of Components:** The Software Product is licensed as a single product. Its component parts may not be separated for use on more than one computer.
+- **Rental:** You may not rent, lease, or lend the Software Product.
+
+## 3. Copyright
+All title and copyrights in and to the Software Product (including but not limited to any images, photographs, animations, video, audio, music, text, and "applets" incorporated into the Software Product), the accompanying printed materials, and any copies of the Software Product are owned by the Licensor or its suppliers. 
+
+## 4. Limitation of Liability
+To the maximum extent permitted by applicable law, in no event shall the Licensor or its suppliers be liable for any special, incidental, indirect, or consequential damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or any other pecuniary loss) arising out of the use of or inability to use the Software Product.
+
+Copyright © 2026 ReseolabX. All rights reserved.
+# Privacy Policy
+
+**Last Updated:** April 2026
+
+## 1. Information We Collect
+When you use ReseolabX, we may collect the following types of information:
+- **License Information:** To verify your access and prevent piracy, we collect information related to your license key, your email address used during activation, and a hardware identifier associated with your device.
+- **Application Data:** All your project data, documents, references, and graphs are stored **locally** on your device. We do not transmit or store your research data on our servers.
+
+## 2. How We Use Your Information
+We use the collected information solely for:
+- Activating and validating your software license.
+- Providing customer support if you encounter licensing issues.
+
+## 3. Data Security
+We implement strict security measures to protect your license data. Since your research data remains local to your device, its security depends on your local machine's security practices.
+
+## 4. Third-Party Services
+We do not share your license information or any local data with third parties, except as necessary to process payments or comply with legal obligations.
+
+## 5. Contact Us
+If you have questions about this Privacy Policy, please contact our support team.
+
+Copyright © 2026 ReseolabX. All rights reserved.
+# Terms of Service
+
+**Last Updated:** April 2026
+
+## 1. Acceptance of Terms
+By accessing or using the ReseolabX software, you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you may not use our services.
+
+## 2. License Details
+- A valid license grants you access to full features of the software as defined in your purchasing tier.
+- Licenses are periodically verified over the internet.
+- You are responsible for maintaining the confidentiality of your license key and account credentials.
+
+## 3. Acceptable Use
+You agree not to:
+- Interfere with or disrupt the operation of the software or licensing servers.
+- Attempt to bypass the licensing, security, or validation mechanisms of the software.
+- Distribute pirated or unauthorized copies of the software.
+
+## 4. Termination
+We reserve the right to terminate or suspend your license and access to the software without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.
+
+## 5. Modifications
+We reserve the right, at our sole discretion, to modify or replace these Terms at any time.
+
+Copyright © 2026 ReseolabX. All rights reserved.
