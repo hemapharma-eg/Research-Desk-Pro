@@ -85,8 +85,7 @@
       "target": [
         "dmg"
       ],
-      "icon": "build/icon.icns",
-      "license": "build/license.txt"
+      "icon": "build/icon.icns"
     },
     "win": {
       "target": [
@@ -99,8 +98,7 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "license": "build/license.txt"
+      "uninstallerIcon": "build/icon.ico"
     }
   }
 }
