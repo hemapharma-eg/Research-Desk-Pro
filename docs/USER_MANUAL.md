@@ -120,14 +120,14 @@ If the application malfunctions, reference the immediate solutions below to rest
 ## 🔄 Recent Changes
 
 <!-- CHANGELOG_START -->
+- 4bc1faf: chore: upgrade gatekeeper installer license layout from plaintext to professionally styled RTF document
+- 439c9ee: chore: untrack dist-electron build artifacts and ignore scratch folders to mirror antigravity cleanly
+- 148f373: fix(systematic-review): migrate ephemeral localStorage saving engine to persistent SQLite metadata endpoint
+- 35079b8: fix: rename license file to license_en.txt and merge legal agreements for macOS DMG EULA popup
+- 4fceb64: feat: implement dynamic documentation-as-code generator for user manuals
 - 3b258ea: fix: remove invalid license property from package.json since electron-builder auto-detects build/license.txt
 - b9e8950: chore: add legal documentation and update installer configs for EULA acceptance
 - a23eee1: fix(document-editor): dynamic citation sequence numbering
 - c22f435: Fix graph assembler preview placeholder issue
 - a803372: fix: load citation CSL XML styles dynamically into active memory on document initiation to resolve template fallback bug
-- 5219714: fix: synchronize citation formatting engine initialization with stored document configuration on boot
-- 3abacce: feat: complete Research Desk module enhancements and fixes
-- bdd3da0: fix(build): inject production license server URL into all 3 platform builds
-- b5b0a74: feat(license-server): add /api/health diagnostic endpoint to debug Supabase connection
-- daad01f: fix(license-server): enforce strict connection timeout on pg to prevent render 502 gateway timeouts
 <!-- CHANGELOG_END -->

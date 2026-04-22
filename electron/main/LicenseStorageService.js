@@ -64,22 +64,27 @@ class LicenseStorageService {
     const counters = this.getUsageCounters();
     const deviceId = this.getDeviceUuid();
 
-    // Check offline grace and expiry logic here if technically required.
-    // E.g., if reverification is heavily overdue and beyond grace days -> revert to demo
+    // For perpetual licenses: NEVER auto-downgrade the mode based on time.
+    // The license server can explicitly revoke via the silent refresh endpoint
+    // if needed. Time-based degradation caused false demo-mode regressions
+    // when the server was unreachable (e.g. Render free-tier sleeping).
     if (state.mode === 'licensed_active' && state.last_verified_at) {
       const lastVerified = new Date(state.last_verified_at).getTime();
       const now = new Date().getTime();
       const hoursSinceVerify = (now - lastVerified) / (1000 * 60 * 60);
 
-      // Are we due for a refresh? (Usually app triggers a silent refresh if true)
-      state.isRefreshDue = hoursSinceVerify > (state.reverify_after_hours || 72);
+      // Hint flag: tells the renderer it should attempt a background refresh.
+      // This does NOT change the mode or entitlements in any way.
+      state.isRefreshDue = hoursSinceVerify > (state.reverify_after_hours || 8760);
+    }
 
-      // Have we exceeded the extended offline grace allowance?
-      const graceHours = (state.offline_grace_days || 7) * 24;
-      if (hoursSinceVerify > ((state.reverify_after_hours || 72) + graceHours)) {
-         state.mode = 'offline_grace_expired'; // Will act as demo
-      } else if (state.isRefreshDue) {
-         state.mode = 'offline_grace';
+    // Also treat any previously-degraded states as fully licensed.
+    // This recovers users who were already stuck in offline_grace_expired.
+    if (state.mode === 'offline_grace' || state.mode === 'offline_grace_expired') {
+      if (state.license_id && state.entitlement_token) {
+        state.mode = 'licensed_active';
+        // Persist the recovery so it sticks
+        this.updateLicenseState({ mode: 'licensed_active' });
       }
     }
 

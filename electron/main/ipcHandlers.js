@@ -108,6 +108,29 @@ ipcMain.handle('dialog:openPdf', async (event) => {
   return filePaths[0]; // Return the absolute path
 });
 
+ipcMain.handle('file:copyPdfToProject', async (event, sourcePath) => {
+  try {
+    const projectPath = dbManager.getProjectPath();
+    if (!projectPath) {
+      return { success: false, error: 'No project is open.' };
+    }
+    const pdfsDir = path.join(projectPath, 'pdfs');
+    if (!fs.existsSync(pdfsDir)) {
+      fs.mkdirSync(pdfsDir, { recursive: true });
+    }
+    // Use a unique filename to avoid collisions
+    const ext = path.extname(sourcePath) || '.pdf';
+    const baseName = path.basename(sourcePath, ext);
+    const uniqueName = `${baseName}_${Date.now()}${ext}`;
+    const destPath = path.join(pdfsDir, uniqueName);
+    fs.copyFileSync(sourcePath, destPath);
+    return { success: true, destPath };
+  } catch (error) {
+    console.error('Failed to copy PDF to project:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
 ipcMain.handle('dialog:openPath', async (event, filePath) => {
   try {
     const { shell } = require('electron');

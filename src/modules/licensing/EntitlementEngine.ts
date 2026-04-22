@@ -33,7 +33,9 @@ export const DEFAULT_DEMO_POLICY = {
 
 export class EntitlementEngine {
   static getEntitlements(state: LicenseState, counters: DemoUsageCounters, policy = DEFAULT_DEMO_POLICY) {
-    const isFull = state.mode === 'licensed_active' || state.mode === 'offline_grace';
+    // For perpetual licenses, ALL non-demo modes grant full access.
+    // The server can explicitly revoke by setting mode back to 'demo'.
+    const isFull = state.mode === 'licensed_active' || state.mode === 'offline_grace' || state.mode === 'offline_grace_expired';
     
     if (isFull) {
       return {

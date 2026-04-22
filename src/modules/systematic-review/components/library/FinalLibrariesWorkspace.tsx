@@ -101,9 +101,28 @@ export function FinalLibrariesWorkspace() {
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <button 
-                          className="sr-btn" 
+                          className="sr-btn sr-btn-primary" 
                           style={{ fontSize: 11 }}
-                          onClick={() => alert('Data Extractor module is currently under development. This study will be queued for extraction.')}
+                          onClick={() => {
+                            // Ensure the record is marked for extraction (optional, but good for filtering)
+                            if (!r.userLabels?.includes('Queued for Extraction')) {
+                              dispatch({
+                                type: 'UPDATE_RECORD',
+                                payload: {
+                                  id: r.id,
+                                  updates: {
+                                    userLabels: [...(r.userLabels || []), 'Queued for Extraction']
+                                  }
+                                }
+                              });
+                            }
+                            
+                            // Navigate to the extractor and tell it to select this record
+                            window.dispatchEvent(new CustomEvent('sr:navigate', { detail: { target: 'data-extraction' } }));
+                            setTimeout(() => {
+                              window.dispatchEvent(new CustomEvent('sr:select-record', { detail: { recordId: r.id } }));
+                            }, 100);
+                          }}
                         >
                           Send to Extractor
                         </button>

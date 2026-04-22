@@ -17,14 +17,25 @@ export function FullTextScreeningWorkspace() {
   const [note, setNote] = useState<string>('');
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
 
+  const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     let currentBlobUrl: string | null = null;
+    let loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+    setPdfLoadError(null);
 
     if (activeRecord?.pdfPath) {
+      // Set a timeout to show an error if loading takes too long
+      loadingTimeout = setTimeout(() => {
+        if (!pdfDataUrl) {
+          setPdfLoadError('PDF loading timed out. The file may be very large or inaccessible.');
+        }
+      }, 10000);
+
       if (activeRecord.pdfPath.startsWith('blob:')) {
         setPdfDataUrl(activeRecord.pdfPath);
       } else if (window.api?.readFileBase64) {
-        window.api.readFileBase64(activeRecord.pdfPath).then(res => {
+        window.api.readFileBase64(activeRecord.pdfPath).then((res: any) => {
           if (res.success && res.base64) {
             try {
               // Convert base64 to raw binary data held in a string
@@ -41,14 +52,17 @@ export function FullTextScreeningWorkspace() {
             } catch (e) {
               console.error('Failed to parse PDF binary blob:', e);
               setPdfDataUrl(null);
+              setPdfLoadError('Failed to decode the PDF file.');
             }
           } else {
             console.error(res.error);
             setPdfDataUrl(null);
+            setPdfLoadError('Could not read PDF file. It may have been moved or deleted.');
           }
-        }).catch(err => {
+        }).catch((err: any) => {
           console.error('Failed invoking readFileBase64:', err);
           setPdfDataUrl(null);
+          setPdfLoadError('Failed to load the PDF file.');
         });
       } else {
         setPdfDataUrl(null);
@@ -61,6 +75,9 @@ export function FullTextScreeningWorkspace() {
       // Cleanup to prevent memory leaks from heavy PDF blobs
       if (currentBlobUrl) {
         URL.revokeObjectURL(currentBlobUrl);
+      }
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
       }
     };
   }, [activeRecord?.pdfPath]);
@@ -139,6 +156,12 @@ export function FullTextScreeningWorkspace() {
               style={{ width: '100%', height: '100%', border: 'none' }} 
               title="PDF Viewer" 
             />
+          ) : pdfLoadError ? (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cf1322', flexDirection: 'column', gap: 16, padding: 32, textAlign: 'center' }}>
+               <span style={{ fontSize: 48 }}>⚠️</span>
+               <span style={{ fontWeight: 'bold' }}>{pdfLoadError}</span>
+               <span style={{ fontSize: 13, color: '#888' }}>Please go back to the Full Text Manager tab and re-attach the file, or check your internet connection if the file is stored remotely.</span>
+            </div>
           ) : (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', flexDirection: 'column' }}>
                <span style={{ fontSize: 48, marginBottom: 16 }}>{activeRecord?.pdfPath ? '⏳' : '📄'}</span>

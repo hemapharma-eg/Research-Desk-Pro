@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './SystematicReview.css';
 import { SystematicReviewProvider, useSystematicReview } from './context/SystematicReviewContext';
 import type { ReviewStage } from './types/ReviewModels';
@@ -44,6 +44,17 @@ const NAV_ITEMS: { id: ReviewStage | 'dashboard' | 'libraries' | 'export' | 'set
 function SystematicReviewContent() {
   const { state } = useSystematicReview();
   const [currentNav, setCurrentNav] = useState<string>('dashboard');
+
+  useEffect(() => {
+    const handleNav = (e: Event) => {
+      const target = (e as CustomEvent).detail?.target;
+      if (target) {
+        setCurrentNav(target);
+      }
+    };
+    window.addEventListener('sr:navigate', handleNav);
+    return () => window.removeEventListener('sr:navigate', handleNav);
+  }, []);
 
   const renderContent = () => {
     switch (currentNav) {
@@ -135,10 +146,31 @@ function SystematicReviewContent() {
   );
 }
 
+import React from 'react';
+
+class SRErrorBoundary extends React.Component<{children: React.ReactNode}, {error: Error | null}> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 20, color: 'red' }}>
+          <h2>Systematic Review Module Crashed</h2>
+          <pre>{(this.state.error as Error).message}</pre>
+          <pre>{(this.state.error as Error).stack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function SystematicReviewStudio() {
   return (
     <SystematicReviewProvider>
-      <SystematicReviewContent />
+      <SRErrorBoundary>
+        <SystematicReviewContent />
+      </SRErrorBoundary>
     </SystematicReviewProvider>
   );
 }

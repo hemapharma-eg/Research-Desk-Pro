@@ -17,18 +17,41 @@ export function FullTextManager() {
       try {
         const resultPath = await window.api.openPdfDialog();
         if (typeof resultPath === 'string') {
+          // Copy the PDF into the project's pdfs/ directory for persistence
+          let finalPath = resultPath;
+          if (window.api.copyPdfToProject) {
+            try {
+              const copyRes = await window.api.copyPdfToProject(resultPath);
+              if (copyRes.success && copyRes.destPath) {
+                finalPath = copyRes.destPath;
+              }
+            } catch (copyErr) {
+              console.warn('Could not copy PDF to project dir, using original path:', copyErr);
+            }
+          }
           dispatch({ 
             type: 'UPDATE_RECORD', 
             payload: { 
               id: recordId, 
               updates: { 
                 pdfAttached: true, 
-                pdfPath: resultPath,
+                pdfPath: finalPath,
                 stage: 'full-text-screening' 
               } 
             }
           });
-          logEvent('pdf_attached', 'full-text-retrieval', recordId, `Attached PDF: ${resultPath}`);
+          logEvent('pdf_attached', 'full-text-retrieval', recordId, `Attached PDF: ${finalPath}`);
+
+          // Auto-save SR state to database so PDF paths persist without manual save
+          try {
+            const updatedState = { ...state };
+            updatedState.records = updatedState.records.map(r =>
+              r.id === recordId ? { ...r, pdfAttached: true, pdfPath: finalPath, stage: 'full-text-screening' as const } : r
+            );
+            await window.api.setMetadata('sr_app_state', JSON.stringify(updatedState));
+          } catch (saveErr) {
+            console.warn('Auto-save after PDF attachment failed:', saveErr);
+          }
         }
       } catch (e) {
         console.error("Error attaching PDF:", e);

@@ -19,6 +19,13 @@ export function DataExtractorWorkspace() {
 
   useEffect(() => {
     loadTemplates();
+
+    const handleSelectRecord = (e: Event) => {
+      const recordId = (e as CustomEvent).detail?.recordId;
+      if (recordId) setSelectedRefId(recordId);
+    };
+    window.addEventListener('sr:select-record', handleSelectRecord);
+    return () => window.removeEventListener('sr:select-record', handleSelectRecord);
   }, []);
 
   const loadTemplates = async () => {
@@ -109,19 +116,56 @@ export function DataExtractorWorkspace() {
   const pdfPath = activeRecord?.pdfPath;
 
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
+    let currentBlobUrl: string | null = null;
+    setPdfError(null);
+
     if (pdfPath) {
-      window.api.readFileBase64(pdfPath).then(res => {
-        if (res.success && res.base64) {
-          setPdfDataUrl(`data:application/pdf;base64,${res.base64}`);
-        } else {
+      if (pdfPath.startsWith('blob:')) {
+        // In-session blob URL (browser fallback)
+        setPdfDataUrl(pdfPath);
+      } else if (window.api?.readFileBase64) {
+        window.api.readFileBase64(pdfPath).then((res: any) => {
+          if (res.success && res.base64) {
+            try {
+              const byteCharacters = atob(res.base64);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: 'application/pdf' });
+              currentBlobUrl = URL.createObjectURL(blob);
+              setPdfDataUrl(currentBlobUrl);
+            } catch (e) {
+              console.error('Failed to parse PDF binary blob:', e);
+              setPdfDataUrl(null);
+              setPdfError('Failed to decode PDF file.');
+            }
+          } else {
+            console.error('readFileBase64 failed:', res.error);
+            setPdfDataUrl(null);
+            setPdfError('Could not read PDF file. It may have been moved or deleted.');
+          }
+        }).catch((err: any) => {
+          console.error('Failed invoking readFileBase64:', err);
           setPdfDataUrl(null);
-        }
-      });
+          setPdfError('Failed to load PDF file.');
+        });
+      } else {
+        setPdfDataUrl(null);
+      }
     } else {
       setPdfDataUrl(null);
     }
+
+    return () => {
+      if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+      }
+    };
   }, [pdfPath]);
 
   if (isLoading) return <div>Loading extraction engine...</div>;
@@ -178,9 +222,22 @@ export function DataExtractorWorkspace() {
         <div style={{ flex: 1, backgroundColor: '#f0f0f0', position: 'relative' }}>
           {pdfDataUrl ? (
             <iframe src={pdfDataUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Full Text PDF" />
+          ) : pdfError ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#cf1322', flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center' }}>
+              <span style={{ fontSize: 48 }}>⚠️</span>
+              <span style={{ fontWeight: 'bold' }}>{pdfError}</span>
+              <span style={{ fontSize: 12, color: '#888' }}>Try re-attaching the PDF in the Full Text Manager tab.</span>
+            </div>
+          ) : pdfPath ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 48 }}>⏳</span>
+              <span>Loading PDF...</span>
+            </div>
           ) : (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888' }}>
-              No PDF attached to this record.
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 48 }}>📄</span>
+              <span>{selectedRefId ? 'No PDF attached to this record.' : 'Select a study to view its PDF.'}</span>
+              {selectedRefId && <span style={{ fontSize: 12, color: '#aaa' }}>Attach PDFs in the Full Text Manager tab first.</span>}
             </div>
           )}
         </div>

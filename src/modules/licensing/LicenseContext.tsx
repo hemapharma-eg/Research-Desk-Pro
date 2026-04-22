@@ -52,7 +52,12 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let currentData = { deviceId: null as string | null, state: defaultState, counters: defaultCounters };
     try {
       if (window.api && window.api.license) {
-        const payload = await window.api.license.getState();
+        let payload = await window.api.license.getState();
+        // Retry once if first call returned nothing (race condition on startup)
+        if (!payload) {
+          await new Promise(r => setTimeout(r, 500));
+          payload = await window.api.license.getState();
+        }
         if (payload) {
           currentData = { deviceId: payload.deviceId, state: payload.state || defaultState, counters: payload.counters || defaultCounters };
         }
