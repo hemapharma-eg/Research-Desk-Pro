@@ -6,7 +6,8 @@ import {
   runChiSquareGoF, runChiSquareIndependence, runFisherExact2x2,
   runPearsonCorrelation, runSpearmanCorrelation, runSimpleLinearRegression,
   runKaplanMeier, runROCAnalysis, runMetaAnalysis,
-  cleanData, type StatTestResult, type SurvivalDataPoint, type CorrectionMethod
+  cleanData, type StatTestResult, type SurvivalDataPoint, type CorrectionMethod,
+  type MetaAnalysisEffectMeasure, type MetaAnalysisRawData
 } from '../../utils/statService';
 
 interface AnalysisWizardProps {
@@ -37,6 +38,8 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
   const [oneTailed, setOneTailed] = useState<'none' | 'greater' | 'less'>('none');
   const [calculateSimpleEffects, setCalculateSimpleEffects] = useState(false);
   const [metaModel, setMetaModel] = useState<'fixed' | 'random'>('random');
+  const [metaDataType, setMetaDataType] = useState<'dichotomous' | 'continuous'>('dichotomous');
+  const [metaMeasure, setMetaMeasure] = useState<MetaAnalysisEffectMeasure>('RR');
   const [error, setError] = useState<string | null>(null);
 
   const getGroups = useCallback(() => {
@@ -223,26 +226,102 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
 
       // Meta-Analysis
       if (family === 'meta-analysis') {
-        // Column 1: Study names (use row names or first column as labels)
-        // Column 2: Effect sizes
-        // Column 3: Standard errors
-        if (groups.length < 2) throw new Error('Meta-analysis requires at least 2 columns: Effect Size, Standard Error. Optionally use row names for study labels.');
+        const allMappedIds = mapping.dependentParamIds;
+        
+        // Separate numeric columns from text/label columns
+        // A column is "numeric data" if:
+        //   - At least 50% of its non-empty values parse as finite numbers
+        //   - Its values are NOT year-like (4-digit ints between 1900-2100)
+        //   - Its column title does not contain 'year', 'date', 'name', 'author', 'study'
+        const numericIds: string[] = [];
+        const textIds: string[] = [];
+        
+        for (const colId of allMappedIds) {
+          const col = dataset.columns.find(c => c.id === colId);
+          const title = (col?.title || '').toLowerCase();
+          const isLabelTitle = /year|date|name|author|study|label|id/i.test(title);
+          
+          let numCount = 0, totalCount = 0, yearLike = true;
+          for (const row of dataset.rows) {
+            const val = row.cells[colId]?.[0]?.value;
+            if (val !== undefined && val !== null && val !== '') {
+              totalCount++;
+              const n = Number(val);
+              if (!isNaN(n) && isFinite(n)) {
+                numCount++;
+                // Check if value looks like a year
+                if (!(Number.isInteger(n) && n >= 1900 && n <= 2100)) yearLike = false;
+              } else {
+                yearLike = false;
+              }
+            }
+          }
+          
+          const isNumeric = totalCount > 0 && numCount / totalCount >= 0.5;
+          const isYearCol = isNumeric && yearLike && totalCount > 0;
+          
+          if (isNumeric && !isYearCol && !isLabelTitle) {
+            numericIds.push(colId);
+          } else {
+            textIds.push(colId);
+          }
+        }
 
-        const effectSizes = groups[0].data;
-        const standardErrors = groups[1].data;
-        const minLen = Math.min(effectSizes.length, standardErrors.length);
+        console.log('[META-WIZARD] allMappedIds:', allMappedIds, 'numericIds:', numericIds, 'textIds:', textIds);
 
-        // Generate study names from row names or sequential
-        const studyNames = dataset.rows.slice(0, minLen).map((r, i) =>
-          r.rowName || `Study ${i + 1}`
+        const requiredCols = metaDataType === 'dichotomous' ? 4 : 6;
+        if (numericIds.length < requiredCols) {
+          throw new Error(`${metaDataType === 'dichotomous' ? 'Dichotomous' : 'Continuous'} Meta-Analysis requires ${requiredCols} numeric columns. Found ${numericIds.length} numeric columns out of ${allMappedIds.length} mapped.`);
+        }
+
+        // Filter rows that have valid numeric data in all required numeric columns
+        const dataColIds = numericIds.slice(0, requiredCols);
+        const validRows = dataset.rows.filter(row =>
+          dataColIds.every(id => {
+            const val = row.cells[id]?.[0]?.value;
+            return val !== undefined && val !== null && val !== '' && !isNaN(Number(val));
+          })
         );
 
-        onRunTest(runMetaAnalysis(
-          studyNames,
-          effectSizes.slice(0, minLen),
-          standardErrors.slice(0, minLen),
-          metaModel
-        ));
+        if (validRows.length === 0) {
+          throw new Error('No valid complete rows found for Meta-Analysis based on mapped columns.');
+        }
+
+        // Build study names: rowName + text column values (e.g. "Sanchez et al." + "2022")
+        const studyNames = validRows.map((r, i) => {
+          const baseName = r.rowName || '';
+          const textParts = textIds.map(id => {
+            const v = r.cells[id]?.[0]?.value;
+            return v !== undefined && v !== null && v !== '' ? String(v) : '';
+          }).filter(Boolean);
+          // Avoid duplicating if rowName already contains the year
+          const extras = textParts.filter(p => !baseName.includes(p));
+          const combined = [baseName, ...extras].filter(Boolean).join(' ');
+          return combined || `Study ${i + 1}`;
+        });
+
+        const getCol = (id: string) => validRows.map(r => Number(r.cells[id]?.[0]?.value));
+        const metaData: MetaAnalysisRawData = { studyNames };
+
+        if (metaDataType === 'dichotomous') {
+          metaData.eventsT = getCol(dataColIds[0]);
+          metaData.totalT = getCol(dataColIds[1]);
+          metaData.eventsC = getCol(dataColIds[2]);
+          metaData.totalC = getCol(dataColIds[3]);
+        } else {
+          metaData.meanT = getCol(dataColIds[0]);
+          metaData.sdT = getCol(dataColIds[1]);
+          metaData.nT = getCol(dataColIds[2]);
+          metaData.meanC = getCol(dataColIds[3]);
+          metaData.sdC = getCol(dataColIds[4]);
+          metaData.nC = getCol(dataColIds[5]);
+        }
+
+        console.log('[META-WIZARD] dataColIds:', dataColIds);
+        console.log('[META-WIZARD] validRows:', validRows.length, 'studyNames:', studyNames);
+        console.log('[META-WIZARD] metaData:', JSON.stringify(metaData, null, 2));
+
+        onRunTest(runMetaAnalysis(metaData, metaMeasure, metaModel));
         return;
       }
     } catch (err: unknown) {
@@ -271,7 +350,11 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
                 if (tf.id === 'categorical') setTestVariant('chi-square');
                 if (tf.id === 'survival') setTestVariant('kaplan-meier');
                 if (tf.id === 'dose-response') setTestVariant('ic50');
-                if (tf.id === 'meta-analysis') setTestVariant('forest');
+                if (tf.id === 'meta-analysis') {
+                  setTestVariant('forest');
+                  setMetaDataType('dichotomous');
+                  setMetaMeasure('RR');
+                }
               }}
             >
               <span>{tf.icon}</span>
@@ -422,20 +505,47 @@ export function AnalysisWizard({ dataset, mapping, onRunTest }: AnalysisWizardPr
 
         {family === 'meta-analysis' && (
           <>
-            <select className="gs-select" value={testVariant} onChange={e => setTestVariant(e.target.value)} style={{ marginBottom: '8px' }}>
-              <option value="forest">Inverse-Variance Weighted Meta-Analysis</option>
-            </select>
             <div className="gs-form-group">
-              <label className="gs-label">Model</label>
+              <label className="gs-label">Data Type</label>
+              <select className="gs-select" value={metaDataType} onChange={e => {
+                const val = e.target.value as 'dichotomous' | 'continuous';
+                setMetaDataType(val);
+                if (val === 'dichotomous') setMetaMeasure('RR');
+                else setMetaMeasure('MD');
+              }}>
+                <option value="dichotomous">Dichotomous (Events/Total)</option>
+                <option value="continuous">Continuous (Mean/SD/N)</option>
+              </select>
+            </div>
+            <div className="gs-form-group">
+              <label className="gs-label">Effect Measure</label>
+              {metaDataType === 'dichotomous' ? (
+                <select className="gs-select" value={metaMeasure} onChange={e => setMetaMeasure(e.target.value as MetaAnalysisEffectMeasure)}>
+                  <option value="RR">Risk Ratio (RR)</option>
+                  <option value="OR">Odds Ratio (OR)</option>
+                  <option value="RD">Risk Difference (RD)</option>
+                </select>
+              ) : (
+                <select className="gs-select" value={metaMeasure} onChange={e => setMetaMeasure(e.target.value as MetaAnalysisEffectMeasure)}>
+                  <option value="MD">Mean Difference (MD)</option>
+                  <option value="SMD">Standardized Mean Difference (SMD)</option>
+                </select>
+              )}
+            </div>
+            <div className="gs-form-group">
+              <label className="gs-label">Pooling Model</label>
               <select className="gs-select" value={metaModel} onChange={e => setMetaModel(e.target.value as 'fixed' | 'random')}>
                 <option value="random">Random-Effects (DerSimonian-Laird)</option>
                 <option value="fixed">Fixed-Effect (Inverse Variance)</option>
               </select>
             </div>
             <div className="gs-recommendation" style={{ fontSize: '11px' }}>
-              <strong>Data format:</strong> Column 1 = Effect Sizes (e.g. SMD, logOR, mean difference), Column 2 = Standard Errors. Use row names for study labels.
-              <br /><br />
-              <strong>Tip:</strong> After running the analysis, switch to the <strong>Graph</strong> tab and select <strong>Forest Plot</strong> from the chart type dropdown.
+              <strong>Data Mapping:</strong><br/>
+              {metaDataType === 'dichotomous' 
+                ? '1. Treat Events, 2. Treat Total, 3. Ctrl Events, 4. Ctrl Total' 
+                : '1. Treat Mean, 2. Treat SD, 3. Treat N, 4. Ctrl Mean, 5. Ctrl SD, 6. Ctrl N'
+              }<br/><br/>
+              <strong>Tip:</strong> After running, select <strong>Forest Plot</strong> from the chart type dropdown.
             </div>
           </>
         )}

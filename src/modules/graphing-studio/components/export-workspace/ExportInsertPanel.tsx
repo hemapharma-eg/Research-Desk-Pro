@@ -122,7 +122,7 @@ function trimCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
     }
   }
   
-  const pad = 8;
+  const pad = 16;
   const trimLeft = Math.max(0, left - pad);
   const trimTop = Math.max(0, top - pad);
   const trimRight = Math.min(width - 1, right + pad);
@@ -162,6 +162,10 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
     }
     if (!chartRef.current) return;
     try {
+      // Hide controls before capture
+      const noExportEls = chartRef.current.querySelectorAll('[data-no-export="true"]');
+      noExportEls.forEach(el => (el as HTMLElement).style.display = 'none');
+
       // Compute the exact pixels needed
       const currentScreenPx = chartRef.current.offsetWidth || 800;
       let pixelsNeeded = targetWidth;
@@ -171,6 +175,10 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
       const scale = pixelsNeeded / currentScreenPx;
 
       const rawCanvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale });
+
+      // Restore controls
+      noExportEls.forEach(el => (el as HTMLElement).style.display = '');
+
       const canvas = trimCanvas(rawCanvas);
       const rawDataUrl = canvas.toDataURL('image/png');
       const finalDataUrl = changeDpiDataUrl(rawDataUrl, dpi);
@@ -179,6 +187,11 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
       trackUsage('graphs_exported');
       setShowSettings(null);
     } catch (err) {
+      // Restore controls on error
+      if (chartRef.current) {
+        const noExportEls = chartRef.current.querySelectorAll('[data-no-export="true"]');
+        noExportEls.forEach(el => (el as HTMLElement).style.display = '');
+      }
       console.error(`Export ${format} failed`, err);
     }
   };
@@ -211,7 +224,13 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
   const handleCopyToClipboard = async () => {
     if (!chartRef.current) return;
     try {
+      const noExportEls = chartRef.current.querySelectorAll('[data-no-export="true"]');
+      noExportEls.forEach(el => (el as HTMLElement).style.display = 'none');
+
       const rawCanvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale: 4 });
+
+      noExportEls.forEach(el => (el as HTMLElement).style.display = '');
+
       const canvas = trimCanvas(rawCanvas);
       canvas.toBlob(async blob => {
         if (blob) {
@@ -221,6 +240,10 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
         }
       }, 'image/png');
     } catch (err) {
+      if (chartRef.current) {
+        const noExportEls = chartRef.current.querySelectorAll('[data-no-export="true"]');
+        noExportEls.forEach(el => (el as HTMLElement).style.display = '');
+      }
       console.error('Copy to clipboard failed', err);
     }
   };
@@ -228,7 +251,13 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
   const handleInsertIntoDocument = async () => {
     if (!chartRef.current) return;
     try {
+      const noExportEls = chartRef.current.querySelectorAll('[data-no-export="true"]');
+      noExportEls.forEach(el => (el as HTMLElement).style.display = 'none');
+
       const rawCanvas = await html2canvas(chartRef.current, { backgroundColor: 'white', scale: 4 });
+
+      noExportEls.forEach(el => (el as HTMLElement).style.display = '');
+
       const canvas = trimCanvas(rawCanvas);
       const dataUrl = canvas.toDataURL('image/png');
 
@@ -246,6 +275,10 @@ export function ExportInsertPanel({ chartRef, datasetName }: ExportInsertPanelPr
       window.dispatchEvent(event);
       alert('Figure saved to project and sent to document editor.');
     } catch (err) {
+      if (chartRef.current) {
+        const noExportEls = chartRef.current.querySelectorAll('[data-no-export="true"]');
+        noExportEls.forEach(el => (el as HTMLElement).style.display = '');
+      }
       console.error('Insert failed', err);
     }
   };

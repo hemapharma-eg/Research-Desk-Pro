@@ -3,8 +3,58 @@ import { useSystematicReview } from '../../context/SystematicReviewContext';
 import type { ReviewRecord } from '../../types/ReviewModels';
 
 export function RawRecordsExplorer() {
-  const { state } = useSystematicReview();
+  const { state, dispatch } = useSystematicReview();
   const [selectedRecord, setSelectedRecord] = useState<ReviewRecord | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<ReviewRecord>>({});
+
+  const handleAttachPdf = async () => {
+    if (!selectedRecord || !window.api?.openPdfDialog) return;
+    try {
+      const resultPath = await window.api.openPdfDialog();
+      if (resultPath && window.api.copyPdfToProject) {
+        const copyRes = await window.api.copyPdfToProject(resultPath);
+        if (copyRes.success && copyRes.newPath) {
+          dispatch({ 
+            type: 'UPDATE_RECORD', 
+            payload: { 
+              id: selectedRecord.id, 
+              updates: { pdfAttached: true, pdfPath: copyRes.newPath } 
+            } 
+          });
+          setSelectedRecord(prev => prev ? { ...prev, pdfAttached: true, pdfPath: copyRes.newPath } : null);
+        } else {
+          alert('Failed to copy PDF to project directory.');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to attach PDF.');
+    }
+  };
+
+  const startEdit = () => {
+    if (!selectedRecord) return;
+    setEditForm({
+      title: selectedRecord.title,
+      authors: selectedRecord.authors,
+      year: selectedRecord.year,
+      journal: selectedRecord.journal,
+      abstract: selectedRecord.abstract,
+      doi: selectedRecord.doi,
+    });
+    setIsEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (!selectedRecord) return;
+    dispatch({
+      type: 'UPDATE_RECORD',
+      payload: { id: selectedRecord.id, updates: editForm }
+    });
+    setSelectedRecord({ ...selectedRecord, ...editForm } as ReviewRecord);
+    setIsEditing(false);
+  };
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -52,7 +102,7 @@ export function RawRecordsExplorer() {
                         </span>
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                        <button className="sr-btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setSelectedRecord(r); }}>Details</button>
+                        <button className="sr-btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setSelectedRecord(r); setIsEditing(false); }}>Details</button>
                       </td>
                     </tr>
                   ))
@@ -72,23 +122,47 @@ export function RawRecordsExplorer() {
           </div>
           
           <div style={{ flex: 1, padding: 20, overflowY: 'auto', fontSize: 13, lineHeight: 1.5 }}>
-            <div style={{ marginBottom: 16 }}>
-              <strong style={{ display: 'block', fontSize: 15, marginBottom: 8, color: 'var(--color-accent-primary)' }}>{selectedRecord.title}</strong>
-              <div style={{ color: 'var(--color-text-secondary)' }}>{selectedRecord.authors} ({selectedRecord.year})</div>
-              <div style={{ color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>{selectedRecord.journal}</div>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <strong style={{ display: 'block', marginBottom: 4 }}>Abstract</strong>
-              <div style={{ background: 'var(--color-bg-subtle)', padding: 12, borderRadius: 6, border: '1px solid var(--color-border-light)' }}>
-                {selectedRecord.abstract || <span style={{ color: '#999', fontStyle: 'italic' }}>No abstract available</span>}
+            {isEditing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 16 }}>
+                <label style={{ fontWeight: 'bold' }}>Title</label>
+                <input className="sr-input" value={editForm.title || ''} onChange={e => setEditForm({...editForm, title: e.target.value})} />
+                
+                <label style={{ fontWeight: 'bold' }}>Authors</label>
+                <input className="sr-input" value={editForm.authors || ''} onChange={e => setEditForm({...editForm, authors: e.target.value})} />
+                
+                <label style={{ fontWeight: 'bold' }}>Year</label>
+                <input className="sr-input" value={editForm.year || ''} onChange={e => setEditForm({...editForm, year: e.target.value})} />
+                
+                <label style={{ fontWeight: 'bold' }}>Journal</label>
+                <input className="sr-input" value={editForm.journal || ''} onChange={e => setEditForm({...editForm, journal: e.target.value})} />
+                
+                <label style={{ fontWeight: 'bold' }}>DOI</label>
+                <input className="sr-input" value={editForm.doi || ''} onChange={e => setEditForm({...editForm, doi: e.target.value})} />
+                
+                <label style={{ fontWeight: 'bold' }}>Abstract</label>
+                <textarea className="sr-input" rows={6} value={editForm.abstract || ''} onChange={e => setEditForm({...editForm, abstract: e.target.value})} />
               </div>
-            </div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <strong style={{ display: 'block', fontSize: 15, marginBottom: 8, color: 'var(--color-accent-primary)' }}>{selectedRecord.title}</strong>
+                <div style={{ color: 'var(--color-text-secondary)' }}>{selectedRecord.authors} ({selectedRecord.year})</div>
+                <div style={{ color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>{selectedRecord.journal}</div>
+              </div>
+            )}
+
+            {!isEditing && (
+              <div style={{ marginBottom: 16 }}>
+                <strong style={{ display: 'block', marginBottom: 4 }}>Abstract</strong>
+                <div style={{ background: 'var(--color-bg-subtle)', padding: 12, borderRadius: 6, border: '1px solid var(--color-border-light)' }}>
+                  {selectedRecord.abstract || <span style={{ color: '#999', fontStyle: 'italic' }}>No abstract available</span>}
+                </div>
+              </div>
+            )}
 
             <table style={{ width: '100%', marginBottom: 16, borderSpacing: '0 8px' }}>
               <tbody>
-                <tr><td style={{ width: 100, color: 'var(--color-text-tertiary)' }}>DOI</td><td>{selectedRecord.doi || '-'}</td></tr>
-                <tr><td style={{ color: 'var(--color-text-tertiary)' }}>PMID</td><td>{selectedRecord.pmid || '-'}</td></tr>
+                {!isEditing && <tr><td style={{ width: 100, color: 'var(--color-text-tertiary)' }}>DOI</td><td>{selectedRecord.doi || '-'}</td></tr>}
+                <tr><td style={{ width: 100, color: 'var(--color-text-tertiary)' }}>PMID</td><td>{selectedRecord.pmid || '-'}</td></tr>
                 <tr><td style={{ color: 'var(--color-text-tertiary)' }}>Source</td><td>{selectedRecord.sourceDatabase}</td></tr>
                 <tr><td style={{ color: 'var(--color-text-tertiary)' }}>Batch</td><td>{selectedRecord.sourceBatch}</td></tr>
                 <tr><td style={{ color: 'var(--color-text-tertiary)' }}>Language</td><td>{selectedRecord.language}</td></tr>
@@ -118,8 +192,17 @@ export function RawRecordsExplorer() {
           </div>
           
           <div style={{ padding: '16px 20px', borderTop: '1px solid var(--color-border-light)', background: 'var(--color-bg-subtle)', display: 'flex', gap: 12 }}>
-            <button className="sr-btn sr-btn-primary" style={{ flex: 1 }}>Edit Metadata</button>
-            <button className="sr-btn" style={{ flex: 1 }}>Attach PDF</button>
+            {isEditing ? (
+              <>
+                <button className="sr-btn sr-btn-primary" style={{ flex: 1, background: '#52c41a', borderColor: '#52c41a' }} onClick={saveEdit}>Save</button>
+                <button className="sr-btn" style={{ flex: 1 }} onClick={() => setIsEditing(false)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <button className="sr-btn sr-btn-primary" style={{ flex: 1 }} onClick={startEdit}>Edit Metadata</button>
+                <button className="sr-btn" style={{ flex: 1 }} onClick={handleAttachPdf}>Attach PDF</button>
+              </>
+            )}
           </div>
         </div>
       )}

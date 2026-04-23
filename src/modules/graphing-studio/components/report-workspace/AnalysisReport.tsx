@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { StatTestResult, PairwiseComparison, DescriptiveStats } from '../../utils/statService';
+import type { StatTestResult, PairwiseComparison, DescriptiveStats, MetaAnalysisResult } from '../../utils/statService';
 
 interface AnalysisReportProps {
   result: StatTestResult | null;
@@ -11,6 +11,21 @@ interface AnalysisReportProps {
 function formatP(p: number): string {
   if (p < 0.0001) return '< 0.0001';
   return p.toFixed(4);
+}
+
+function isMetaResult(r: StatTestResult): r is MetaAnalysisResult {
+  return r && 'studies' in r && 'pooledEffect' in r && 'effectMeasure' in r;
+}
+
+function metaStudiesToCSV(meta: MetaAnalysisResult): string {
+  const isRatio = ['RR', 'OR', 'HR'].includes(meta.effectMeasure);
+  const fmtVal = (v: number) => isRatio ? Math.exp(v).toFixed(4) : v.toFixed(4);
+  const header = `Study,${meta.effectMeasure},CI_Lower,CI_Upper,Weight`;
+  const rows = meta.studies.map(s =>
+    `${s.name},${fmtVal(s.effectSize)},${fmtVal(s.ci_lower)},${fmtVal(s.ci_upper)},${s.weight.toFixed(1)}%`
+  );
+  rows.push(`Pooled,${fmtVal(meta.pooledEffect)},${fmtVal(meta.pooledCI_lower)},${fmtVal(meta.pooledCI_upper)},100.0%`);
+  return [header, ...rows].join('\n');
 }
 
 function copyToClipboard(text: string) {
@@ -215,6 +230,63 @@ export function AnalysisReport({ result, onClear, datasetId, analysisId }: Analy
           </div>
         </div>
       )}
+
+      {/* Meta-Analysis Effect Size Table */}
+      {isMetaResult(result) && (result as MetaAnalysisResult).studies.length > 0 && (() => {
+        const metaRes = result as MetaAnalysisResult;
+        const isRatio = ['RR', 'OR', 'HR'].includes(metaRes.effectMeasure);
+        const fmtVal = (v: number) => isRatio ? Math.exp(v).toFixed(4) : v.toFixed(4);
+        return (
+          <div className="gs-report-block">
+            <div className="gs-report-header">
+              <span>{metaRes.effectMeasure} with 95% Confidence Intervals</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <CopyButton text={metaStudiesToCSV(metaRes)} />
+                <button className="gs-btn gs-btn-sm" onClick={() => handleSendToTableBuilder('meta-analysis')}>
+                  📋 Send table to builder ▾
+                </button>
+              </div>
+            </div>
+            <div className="gs-report-body" style={{ overflowX: 'auto' }}>
+              <table className="gs-table">
+                <thead>
+                  <tr>
+                    <th>Study</th>
+                    {metaRes.dataType === 'dichotomous' && <><th>Events (T)</th><th>Total (T)</th><th>Events (C)</th><th>Total (C)</th></>}
+                    {metaRes.dataType === 'continuous' && <><th>Mean (T)</th><th>SD (T)</th><th>N (T)</th><th>Mean (C)</th><th>SD (C)</th><th>N (C)</th></>}
+                    <th>{metaRes.effectMeasure}</th>
+                    <th>95% CI Lower</th>
+                    <th>95% CI Upper</th>
+                    <th>Weight (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metaRes.studies.map((s, i) => (
+                    <tr key={i}>
+                      <td><strong>{s.name}</strong></td>
+                      {metaRes.dataType === 'dichotomous' && <><td>{s.raw?.a ?? '-'}</td><td>{s.raw?.n1 ?? '-'}</td><td>{s.raw?.c ?? '-'}</td><td>{s.raw?.n2 ?? '-'}</td></>}
+                      {metaRes.dataType === 'continuous' && <><td>{s.raw?.m1?.toFixed(2) ?? '-'}</td><td>{s.raw?.s1?.toFixed(2) ?? '-'}</td><td>{s.raw?.nt ?? '-'}</td><td>{s.raw?.m2?.toFixed(2) ?? '-'}</td><td>{s.raw?.s2?.toFixed(2) ?? '-'}</td><td>{s.raw?.nc ?? '-'}</td></>}
+                      <td><strong>{fmtVal(s.effectSize)}</strong></td>
+                      <td>{fmtVal(s.ci_lower)}</td>
+                      <td>{fmtVal(s.ci_upper)}</td>
+                      <td>{s.weight.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  <tr style={{ fontWeight: 'bold', borderTop: '2px solid var(--color-border-light)' }}>
+                    <td>Pooled ({metaRes.model === 'random' ? 'RE' : 'FE'})</td>
+                    {metaRes.dataType === 'dichotomous' && <><td>-</td><td>-</td><td>-</td><td>-</td></>}
+                    {metaRes.dataType === 'continuous' && <><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></>}
+                    <td style={{ color: '#16A34A' }}>{fmtVal(metaRes.pooledEffect)}</td>
+                    <td>{fmtVal(metaRes.pooledCI_lower)}</td>
+                    <td>{fmtVal(metaRes.pooledCI_upper)}</td>
+                    <td>100.0%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Assumption Checks */}
       {(result.normalityTest || result.varianceTest) && (

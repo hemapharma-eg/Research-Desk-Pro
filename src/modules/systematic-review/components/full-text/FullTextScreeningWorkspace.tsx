@@ -37,23 +37,17 @@ export function FullTextScreeningWorkspace() {
       } else if (window.api?.readFileBase64) {
         window.api.readFileBase64(activeRecord.pdfPath).then((res: any) => {
           if (res.success && res.base64) {
-            try {
-              // Convert base64 to raw binary data held in a string
-              const byteCharacters = atob(res.base64);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: 'application/pdf' });
-              currentBlobUrl = URL.createObjectURL(blob);
-              
-              setPdfDataUrl(currentBlobUrl);
-            } catch (e) {
-              console.error('Failed to parse PDF binary blob:', e);
-              setPdfDataUrl(null);
-              setPdfLoadError('Failed to decode the PDF file.');
-            }
+            fetch(`data:application/pdf;base64,${res.base64}`)
+              .then(response => response.blob())
+              .then(blob => {
+                currentBlobUrl = URL.createObjectURL(blob);
+                setPdfDataUrl(currentBlobUrl);
+              })
+              .catch(e => {
+                console.error('Failed to parse PDF binary blob:', e);
+                setPdfDataUrl(null);
+                setPdfLoadError('Failed to decode the PDF file.');
+              });
           } else {
             console.error(res.error);
             setPdfDataUrl(null);

@@ -120,6 +120,7 @@ If the application malfunctions, reference the immediate solutions below to rest
 ## 🔄 Recent Changes
 
 <!-- CHANGELOG_START -->
+- d5e6b1c: Fix license persistence, SR PDF rendering, and Send to Extractor workflow
 - 4bc1faf: chore: upgrade gatekeeper installer license layout from plaintext to professionally styled RTF document
 - 439c9ee: chore: untrack dist-electron build artifacts and ignore scratch folders to mirror antigravity cleanly
 - 148f373: fix(systematic-review): migrate ephemeral localStorage saving engine to persistent SQLite metadata endpoint
@@ -129,5 +130,4 @@ If the application malfunctions, reference the immediate solutions below to rest
 - b9e8950: chore: add legal documentation and update installer configs for EULA acceptance
 - a23eee1: fix(document-editor): dynamic citation sequence numbering
 - c22f435: Fix graph assembler preview placeholder issue
-- a803372: fix: load citation CSL XML styles dynamically into active memory on document initiation to resolve template fallback bug
 <!-- CHANGELOG_END -->

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, Label,
@@ -481,7 +481,7 @@ export function AdvancedGraphViewer({ dataset, mapping, options, statResult }: A
 
   // --- FOREST PLOT ---
   if (chartType === 'forest') {
-    return renderForestPlot(chartData, options, colorPalette, statResult);
+    return <ForestPlotRenderer data={chartData} options={options} palette={colorPalette} statResult={statResult} />;
   }
 
   // Fallback : bar chart
@@ -776,262 +776,304 @@ function renderStripPlot(data: ChartDataPoint[], options: GraphStyleOptions, pal
   );
 }
 
-function renderForestPlot(data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], statResult?: StatTestResult | null) {
+import { recalculateMetaAnalysis, type MetaAnalysisStudy } from '../../utils/statService';
+
+export function ForestPlotRenderer({ data, options, palette, statResult }: { data: ChartDataPoint[], options: GraphStyleOptions, palette: string[], statResult?: StatTestResult | null }) {
   const meta = statResult && isMetaAnalysisResult(statResult) ? statResult : null;
-  const studies: { name: string; effect: number; ci_lower: number; ci_upper: number; weight: number; se: number }[] = [];
-  let pooled: { effect: number; ci_lower: number; ci_upper: number } | null = null;
-  let hetStats: { I2: number; Q: number; df: number; pValue: number; tau2: number } | null = null;
-  let modelLabel = '';
-  let pooledZ = 0, pooledP = 0;
+  const [excludedStudies, setExcludedStudies] = useState<Set<string>>(new Set());
+  const [showRawCols, setShowRawCols] = useState(false);
 
-  if (meta) {
-    meta.studies.forEach(s => {
-      studies.push({ name: s.name, effect: s.effectSize, ci_lower: s.ci_lower, ci_upper: s.ci_upper, weight: s.weight, se: s.se });
-    });
-    pooled = { effect: meta.pooledEffect, ci_lower: meta.pooledCI_lower, ci_upper: meta.pooledCI_upper };
-    hetStats = meta.heterogeneity;
-    modelLabel = meta.model === 'random' ? 'Overall (Random-Effects)' : 'Overall (Fixed-Effect)';
-    pooledZ = meta.statisticValue;
-    pooledP = meta.mainPValue;
-  } else if (data.length >= 1) {
-    data.forEach(d => {
-      studies.push({ name: d.name, effect: d.mean, ci_lower: d.ci95_lower, ci_upper: d.ci95_upper, weight: 100 / data.length, se: d.sem });
-    });
-    if (data.length > 1) {
-      const mp = data.reduce((s, d) => s + d.mean, 0) / data.length;
-      pooled = { effect: mp, ci_lower: mp - data[0].sem * 1.96, ci_upper: mp + data[0].sem * 1.96 };
+  if (!meta) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Run a meta-analysis first, then select Forest Plot.</div>;
+  if (meta.studies.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>No studies available.</div>;
+
+  const activeStudies = meta.studies.filter(s => !excludedStudies.has(s.name));
+  const recalc = useMemo(() => recalculateMetaAnalysis(activeStudies, meta.model), [activeStudies, meta.model]);
+  const isRatio = ['RR', 'OR', 'HR'].includes(meta.effectMeasure);
+  const isDichotomous = meta.dataType === 'dichotomous';
+
+  const studiesToRender = meta.studies.map(s => {
+    const isActive = !excludedStudies.has(s.name);
+    let weight = 0;
+    if (isActive && recalc) {
+      const idx = activeStudies.findIndex(a => a.name === s.name);
+      weight = idx >= 0 ? recalc.weights[idx] : 0;
     }
-    modelLabel = 'Overall';
+    return { ...s, isActive, weight };
+  });
+
+  const n = studiesToRender.length;
+
+  // ─── PROPORTIONAL LAYOUT (all in viewBox units) ───
+  // The viewBox is sized to content — NO height stretching.
+  const ROW = 24;
+  const HDR = 36;
+  const TOP = HDR + 4;
+  const SEP = TOP + n * ROW;
+  const SUM = SEP + 4;
+  const AX = SUM + ROW + 12;
+  const H = AX + 54;
+
+  const W = showRawCols ? 960 : 820;
+  const C_STUDY = 4;
+  const STUDY_W = showRawCols ? 150 : 130;
+
+  // Raw data columns (optional)
+  let RAW_END = STUDY_W;
+  let C_ET = 0, C_NT = 0, C_EC = 0, C_NC = 0, C_SDT = 0, C_SDC = 0;
+  if (showRawCols && isDichotomous) {
+    C_ET = STUDY_W + 14; C_NT = C_ET + 34; C_EC = C_NT + 38; C_NC = C_EC + 34;
+    RAW_END = C_NC + 24;
+  } else if (showRawCols && !isDichotomous) {
+    C_ET = STUDY_W + 14; C_SDT = C_ET + 38; C_NT = C_SDT + 34;
+    C_EC = C_NT + 38; C_SDC = C_EC + 38; C_NC = C_SDC + 34;
+    RAW_END = C_NC + 24;
   }
 
-  if (studies.length === 0) {
-    return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Run a meta-analysis first, or map columns with effect sizes.</div>;
+  // Right-side columns: | ... Plot ... | gap | RR [95% CI] | gap | Weight |
+  const WT_W = 44;                    // weight column width
+  const WT_X = W - 4;                 // weight right-align anchor
+  const ES_RIGHT = W - WT_W - 8;      // right edge of effect text
+  const ES_X = ES_RIGHT - 2;          // effect text right-align anchor
+  const PLOT_R = ES_RIGHT - 130;      // leave ~130px for effect text like "0.60 [0.34, 1.07]"
+  const PLOT_L = RAW_END + 8;
+  const PLOT_W = Math.max(PLOT_R - PLOT_L, 50);
+
+  // ─── SCALE ───
+  function niceStep(rough: number): number {
+    if (rough <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const r = rough / mag;
+    return (r <= 1.5 ? 1 : r <= 3 ? 2 : r <= 7 ? 5 : 10) * mag;
   }
 
-  // ────────────────────────────────────────────────
-  // LAYOUT — Publication-grade Cochrane/RevMan style
-  // ────────────────────────────────────────────────
-  // Zones (x): Study [0..190] | Weight [192..250] | Plot [270..730] | ES [95% CI] [745..960]
-  const W = 970;
-  const ROW_H = 28;
-  const nStudies = studies.length;
-  const HEADER_Y = 38;
-  const BODY_TOP = HEADER_Y + 18;
-  const bodyRows = nStudies + (pooled ? 1 : 0);
-  const BODY_BOTTOM = BODY_TOP + bodyRows * ROW_H;
-  const AXIS_Y = BODY_BOTTOM + 6;
-  const FOOTER_Y = AXIS_Y + 52;
-  const H = FOOTER_Y + (hetStats ? 36 : 14);
+  const allCIs = activeStudies.flatMap(s => [s.ci_lower, s.ci_upper]);
+  if (recalc) allCIs.push(recalc.pooledCI_lower, recalc.pooledCI_upper);
+  let dMin = allCIs.length ? Math.min(...allCIs) : -1;
+  let dMax = allCIs.length ? Math.max(...allCIs) : 1;
+  if (dMin > 0) dMin = 0;
+  if (dMax < 0) dMax = 0;
+  const dataPad = Math.max((dMax - dMin) * 0.08, 0.05);
+  dMin -= dataPad; dMax += dataPad;
 
-  // Column positions
-  const COL_STUDY_X  = 8;
-  const COL_WT_X     = 206;
-  const PLOT_LEFT    = 270;
-  const PLOT_RIGHT   = 730;
-  const PLOT_W       = PLOT_RIGHT - PLOT_LEFT;
-  const COL_ES_X     = 748;
+  let toX: (v: number) => number;
+  let ticks: { v: number; label: string }[] = [];
 
-  // ── X-axis domain ──
-  const allCIs = studies.flatMap(s => [s.ci_lower, s.ci_upper]);
-  if (pooled) allCIs.push(pooled.ci_lower, pooled.ci_upper);
-  let rawMin = Math.min(...allCIs, 0);
-  let rawMax = Math.max(...allCIs, 0);
-
-  // Compute "nice" tick intervals
-  const rawRange = rawMax - rawMin || 1;
-  const rough = rawRange / 5;
-  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
-  const residual = rough / mag;
-  const niceFrac = residual <= 1.5 ? 1 : residual <= 3 ? 2 : residual <= 7 ? 5 : 10;
-  const tickStep = niceFrac * mag;
-  const axisMin = Math.floor(rawMin / tickStep) * tickStep;
-  const axisMax = Math.ceil(rawMax / tickStep) * tickStep;
-
-  const ticks: number[] = [];
-  for (let v = axisMin; v <= axisMax + tickStep * 0.01; v += tickStep) {
-    ticks.push(Math.round(v * 1e8) / 1e8);
+  if (isRatio) {
+    const eMin = Math.exp(dMin), eMax = Math.exp(dMax);
+    const candidates = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+    const tv = candidates.filter(t => t >= eMin * 0.85 && t <= eMax * 1.15);
+    if (!tv.includes(1)) tv.push(1);
+    tv.sort((a, b) => a - b);
+    const aMin = Math.log(tv[0] || 0.1), aMax = Math.log(tv[tv.length - 1] || 10);
+    const range = aMax - aMin || 1;
+    toX = (v: number) => PLOT_L + PLOT_W * ((v - aMin) / range);
+    ticks = tv.map(t => ({ v: Math.log(t), label: String(t) }));
+  } else {
+    const range = dMax - dMin || 1;
+    const step = niceStep(range / 5);
+    const aMin = Math.floor(dMin / step) * step;
+    const aMax = Math.ceil(dMax / step) * step;
+    for (let v = aMin; v <= aMax + step * 0.001; v += step) {
+      const rv = Math.round(v * 1e6) / 1e6;
+      ticks.push({ v: rv, label: Math.abs(rv) < 1e-9 ? '0' : rv.toFixed(Math.abs(rv) < 1 ? 2 : 1) });
+    }
+    if (!ticks.some(t => Math.abs(t.v) < step * 0.01)) ticks.push({ v: 0, label: '0' });
+    ticks.sort((a, b) => a.v - b.v);
+    toX = (v: number) => PLOT_L + PLOT_W * ((v - aMin) / (aMax - aMin || 1));
   }
-  // Ensure 0 is in ticks
-  if (!ticks.some(t => Math.abs(t) < tickStep * 0.01)) ticks.push(0);
-  ticks.sort((a, b) => a - b);
 
-  const toX = (v: number) => PLOT_LEFT + PLOT_W * ((v - axisMin) / (axisMax - axisMin));
   const nullX = toX(0);
-  const maxWeight = Math.max(...studies.map(s => s.weight), 1);
-
-  // Format number compactly
+  const maxWt = recalc && recalc.weights.length ? Math.max(...recalc.weights) : 1;
   const fmt = (n: number, d = 2) => n.toFixed(d);
-  const fmtP = (p: number) => p < 0.00001 ? '< 0.00001' : p < 0.0001 ? '< 0.0001' : p < 0.001 ? p.toFixed(5) : p.toFixed(4);
+  const expFmt = (v: number) => isRatio ? Math.exp(v).toFixed(2) : v.toFixed(2);
 
-  // ── Colours ──
-  const STUDY_COLOR   = '#1a1a2e';  // near-black for study squares
-  const CI_COLOR      = '#1a1a2e';
-  const DIAMOND_FILL  = '#d62828';
-  const DIAMOND_STROKE = '#9b2226';
-  const NULL_LINE_COL = '#495057';
-  const GRID_COL      = '#dee2e6';
-  const HEADER_BG     = '#f1f3f5';
-  const ZEBRA_COL     = '#f8f9fa';
-  const RULE_COL      = '#adb5bd';
-  const TEXT_PRIMARY   = '#212529';
-  const TEXT_SECONDARY = '#495057';
-  const TEXT_MUTED     = '#868e96';
-  const FONT = options.fontFamily || "'Helvetica Neue', Arial, sans-serif";
+  const toggleStudy = (name: string) => setExcludedStudies(prev => {
+    const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s;
+  });
+
+  const TXT = '#1d2939';
+  const TXT2 = '#475467';
+  const RULE = '#d0d5dd';
+  const BLUE = '#2563eb';
+  const DIAM = '#0b7285';
+  const ZEBRA = '#f8fafc';
+  const HDR_BG = '#eef1f6';
+
+  const xLabel = isRatio
+    ? (meta.effectMeasure === 'OR' ? 'Odds Ratio (Log Scale)' : meta.effectMeasure === 'HR' ? 'Hazard Ratio (Log Scale)' : 'Relative Risk (Log Scale)')
+    : (meta.effectMeasure === 'SMD' ? 'Standardized Mean Difference' : 'Mean Difference');
 
   return (
-    <div style={{ width: '100%', height: '100%', fontFamily: FONT, overflow: 'auto', background: '#fff' }}>
-      {options.title && (
-        <div style={{ textAlign: 'center', fontSize: options.titleFontSize || 16, fontWeight: 700, color: TEXT_PRIMARY, padding: '10px 0 2px', letterSpacing: '-0.01em' }}>
-          {options.title}
-        </div>
-      )}
-      {options.subtitle && (
-        <div style={{ textAlign: 'center', fontSize: 12, color: TEXT_MUTED, paddingBottom: 6 }}>{options.subtitle}</div>
-      )}
-      <svg
-        width="100%"
-        viewBox={`0 0 ${W} ${H}`}
-        style={{ display: 'block', maxWidth: '100%' }}
-        xmlns="http://www.w3.org/2000/svg"
-        fontFamily={FONT}
-      >
-        {/* ═══════════════ HEADER ROW ═══════════════ */}
-        <rect x={0} y={HEADER_Y - 14} width={W} height={20} fill={HEADER_BG} />
-        <line x1={0} y1={HEADER_Y - 14}  x2={W} y2={HEADER_Y - 14}  stroke={RULE_COL} strokeWidth="0.7" />
-        <line x1={0} y1={HEADER_Y + 6}   x2={W} y2={HEADER_Y + 6}   stroke={RULE_COL} strokeWidth="0.7" />
-        <text x={COL_STUDY_X}  y={HEADER_Y} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>Study</text>
-        <text x={COL_WT_X}     y={HEADER_Y} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>Weight</text>
-        <text x={PLOT_LEFT + PLOT_W / 2} y={HEADER_Y} textAnchor="middle" fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>{options.xAxisLabel || 'Effect Size'} (95% CI)</text>
-        <text x={COL_ES_X}     y={HEADER_Y} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>ES [95% CI]</text>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#fff', fontFamily: "'Inter','Helvetica Neue',Arial,sans-serif" }}>
+      {/* SVG — sized to content, fills width, height auto from aspect ratio */}
+      <div id="forest-plot-export" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '8px' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '100%' }} xmlns="http://www.w3.org/2000/svg">
 
-        {/* ═══════════════ NULL-EFFECT LINE ═══════════════ */}
-        <line x1={nullX} y1={BODY_TOP} x2={nullX} y2={BODY_BOTTOM} stroke={NULL_LINE_COL} strokeWidth="0.8" strokeDasharray="4 2.5" />
+          {/* ═══ HEADER ═══ */}
+          <rect x={0} y={0} width={W} height={HDR} fill={HDR_BG} />
+          <line x1={0} y1={HDR} x2={W} y2={HDR} stroke={RULE} strokeWidth="0.7" />
+          <text x={C_STUDY} y={22} fontSize="11" fontWeight="700" fill={TXT}>Study</text>
 
-        {/* ═══════════════ STUDY ROWS ═══════════════ */}
-        {studies.map((s, i) => {
-          const y = BODY_TOP + (i + 0.5) * ROW_H;
-          const effectX  = toX(s.effect);
-          const rawLeft  = toX(s.ci_lower);
-          const rawRight = toX(s.ci_upper);
-          const ciLX = Math.max(PLOT_LEFT, rawLeft);
-          const ciRX = Math.min(PLOT_RIGHT, rawRight);
-          const clippedLeft  = rawLeft  < PLOT_LEFT;
-          const clippedRight = rawRight > PLOT_RIGHT;
+          {showRawCols && isDichotomous && (<>
+            <text x={(C_ET + C_NT)/2 + 5} y={11} textAnchor="middle" fontSize="9" fontWeight="700" fill={TXT}>Experimental</text>
+            <text x={C_ET + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Events</text>
+            <text x={C_NT + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Total</text>
+            <text x={(C_EC + C_NC)/2 + 5} y={11} textAnchor="middle" fontSize="9" fontWeight="700" fill={TXT}>Control</text>
+            <text x={C_EC + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Events</text>
+            <text x={C_NC + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Total</text>
+          </>)}
+          {showRawCols && !isDichotomous && (<>
+            <text x={(C_ET + C_NT)/2 + 5} y={11} textAnchor="middle" fontSize="9" fontWeight="700" fill={TXT}>Experimental</text>
+            <text x={C_ET + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Mean</text>
+            <text x={C_SDT + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>SD</text>
+            <text x={C_NT + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Total</text>
+            <text x={(C_EC + C_NC)/2 + 5} y={11} textAnchor="middle" fontSize="9" fontWeight="700" fill={TXT}>Control</text>
+            <text x={C_EC + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Mean</text>
+            <text x={C_SDC + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>SD</text>
+            <text x={C_NC + 5} y={28} textAnchor="end" fontSize="8.5" fill={TXT2}>Total</text>
+          </>)}
 
-          // Weight-proportional square: min 5px, max 14px side
-          const sqSize = 5 + (s.weight / maxWeight) * 9;
+          <text x={PLOT_L + PLOT_W/2} y={22} textAnchor="middle" fontSize="10" fontWeight="700" fill={TXT}>
+            {meta.effectMeasure} IV, {meta.model === 'random' ? 'Random' : 'Fixed'}, 95% CI
+          </text>
+          <text x={ES_X} y={16} textAnchor="end" fontSize="9.5" fontWeight="700" fill={TXT}>{meta.effectMeasure}</text>
+          <text x={ES_X} y={29} textAnchor="end" fontSize="8" fill={TXT2}>[95% CI]</text>
+          <text x={WT_X} y={22} textAnchor="end" fontSize="9.5" fontWeight="700" fill={TXT}>Weight</text>
 
+
+
+          {/* ═══ STUDY ROWS ═══ */}
+          {studiesToRender.map((s, i) => {
+            const y = TOP + i * ROW + ROW / 2;
+            const eff = toX(s.effectSize);
+            const lx = Math.max(PLOT_L, toX(s.ci_lower));
+            const rx = Math.min(PLOT_R, toX(s.ci_upper));
+            const sq = s.isActive && maxWt > 0 ? Math.max(4, 4 + (s.weight / maxWt) * 10) : 3;
+            const op = s.isActive ? 1 : 0.22;
+
+            return (
+              <g key={i} opacity={op}>
+                {i % 2 === 0 && <rect x={0} y={y - ROW/2} width={W} height={ROW} fill={ZEBRA} />}
+                <text x={C_STUDY} y={y + 4} fontSize="10.5" fill={TXT}>{s.name}</text>
+
+                {showRawCols && isDichotomous && (<>
+                  <text x={C_ET + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.a ?? '–'}</text>
+                  <text x={C_NT + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.n1 ?? '–'}</text>
+                  <text x={C_EC + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.c ?? '–'}</text>
+                  <text x={C_NC + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.n2 ?? '–'}</text>
+                </>)}
+                {showRawCols && !isDichotomous && (<>
+                  <text x={C_ET + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.m1 != null ? fmt(s.raw.m1) : '–'}</text>
+                  <text x={C_SDT + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.s1 != null ? fmt(s.raw.s1) : '–'}</text>
+                  <text x={C_NT + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.nt ?? '–'}</text>
+                  <text x={C_EC + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.m2 != null ? fmt(s.raw.m2) : '–'}</text>
+                  <text x={C_SDC + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.s2 != null ? fmt(s.raw.s2) : '–'}</text>
+                  <text x={C_NC + 5} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>{s.raw?.nc ?? '–'}</text>
+                </>)}
+
+                {s.isActive && isFinite(s.effectSize) && isFinite(s.ci_lower) && isFinite(s.ci_upper) && (
+                  <>
+                    <line x1={lx} y1={y} x2={rx} y2={y} stroke={TXT} strokeWidth="1.1" />
+                    <line x1={lx} y1={y - 3} x2={lx} y2={y + 3} stroke={TXT} strokeWidth="0.8" />
+                    <line x1={rx} y1={y - 3} x2={rx} y2={y + 3} stroke={TXT} strokeWidth="0.8" />
+                    <rect x={eff - sq/2} y={y - sq/2} width={sq} height={sq} fill={BLUE} />
+                  </>
+                )}
+
+                <text x={ES_X} y={y + 4} textAnchor="end" fontSize="10" fill={TXT}>
+                  {expFmt(s.effectSize)} [{expFmt(s.ci_lower)}, {expFmt(s.ci_upper)}]
+                </text>
+                <text x={WT_X} y={y + 4} textAnchor="end" fontSize="10" fontWeight="600" fill={TXT}>{s.isActive ? fmt(s.weight, 1) + '%' : '–'}</text>
+              </g>
+            );
+          })}
+
+          {/* ═══ TOTAL / SUMMARY ═══ */}
+          {recalc && (() => {
+            const y = SUM + ROW / 2;
+            // Diamond: center at pooled effect, left/right at CI bounds
+            const cc = toX(recalc.pooledEffect);
+            const dl = Math.max(PLOT_L, toX(recalc.pooledCI_lower));
+            const dr = Math.min(PLOT_R, toX(recalc.pooledCI_upper));
+            const dh = 8; // half-height of diamond
+
+            let eT = 0, cT = 0;
+            activeStudies.forEach(s => {
+              eT += isDichotomous ? (s.raw?.n1 || 0) : (s.raw?.nt || 0);
+              cT += isDichotomous ? (s.raw?.n2 || 0) : (s.raw?.nc || 0);
+            });
+
+            return (
+              <g>
+                <line x1={0} y1={SEP} x2={W} y2={SEP} stroke={RULE} strokeWidth="0.7" />
+                <text x={C_STUDY} y={y + 4} fontSize="10.5" fontWeight="700" fill={TXT}>Total (95% CI)</text>
+
+                {showRawCols && (<>
+                  <text x={(isDichotomous ? C_NT : C_NT) + 5} y={y + 4} textAnchor="end" fontSize="10" fontWeight="700" fill={TXT}>{eT}</text>
+                  <text x={(isDichotomous ? C_NC : C_NC) + 5} y={y + 4} textAnchor="end" fontSize="10" fontWeight="700" fill={TXT}>{cT}</text>
+                </>)}
+
+                {/* ◆ DIAMOND — proper publication-grade shape */}
+                {dl <= dr && (
+                  <polygon
+                    points={`${dl},${y} ${cc},${y - dh} ${dr},${y} ${cc},${y + dh}`}
+                    fill={DIAM} stroke={DIAM} strokeWidth="0.5" strokeLinejoin="miter"
+                  />
+                )}
+
+                <text x={ES_X} y={y + 4} textAnchor="end" fontSize="10" fontWeight="700" fill={TXT}>
+                  {expFmt(recalc.pooledEffect)} [{expFmt(recalc.pooledCI_lower)}, {expFmt(recalc.pooledCI_upper)}]
+                </text>
+                <text x={WT_X} y={y + 4} textAnchor="end" fontSize="10" fontWeight="700" fill={TXT}>100.0%</text>
+              </g>
+            );
+          })()}
+
+          {/* ═══ NULL EFFECT LINE — rendered last so it sits on top of zebra stripes ═══ */}
+          <line x1={nullX} y1={TOP - 2} x2={nullX} y2={SUM + ROW + 4} stroke="#344054" strokeWidth="1.0" strokeDasharray="6 3" />
+
+          {/* ═══ X AXIS ═══ */}
+          <line x1={PLOT_L} y1={AX} x2={PLOT_R} y2={AX} stroke={TXT} strokeWidth="0.7" />
+          {ticks.map((t, i) => {
+            const tx = toX(t.v);
+            if (tx < PLOT_L - 1 || tx > PLOT_R + 1) return null;
+            return (
+              <g key={i}>
+                <line x1={tx} y1={AX} x2={tx} y2={AX + 4} stroke={TXT} strokeWidth="0.7" />
+                <text x={tx} y={AX + 15} textAnchor="middle" fontSize="9.5" fill={TXT}>{t.label}</text>
+              </g>
+            );
+          })}
+          <text x={PLOT_L + PLOT_W/2} y={AX + 30} textAnchor="middle" fontSize="10" fill={TXT2}>{xLabel}</text>
+          <text x={PLOT_L + (nullX - PLOT_L)/2} y={AX + 42} textAnchor="middle" fontSize="9" fill={TXT2}>Favours Treatment</text>
+          <text x={nullX + (PLOT_R - nullX)/2} y={AX + 42} textAnchor="middle" fontSize="9" fill={TXT2}>Favours Control</text>
+
+          {/* Heterogeneity */}
+          {recalc && recalc.heterogeneity && (
+            <text x={C_STUDY} y={H - 4} fontSize="8.5" fill={TXT2}>
+              Heterogeneity: Tau² = {fmt(recalc.heterogeneity.tau2, 2)}; Chi² = {fmt(recalc.heterogeneity.Q, 2)}, df = {recalc.heterogeneity.df} (P = {recalc.heterogeneity.pValue < 0.0001 ? '< 0.0001' : fmt(recalc.heterogeneity.pValue, 4)}); I² = {fmt(recalc.heterogeneity.I2, 0)}%
+            </text>
+          )}
+        </svg>
+      </div>
+
+      {/* ═══ CONTROLS (not exported) ═══ */}
+      <div data-no-export="true" style={{ padding: '6px 10px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: TXT2, cursor: 'pointer', background: '#fff', padding: '3px 8px', borderRadius: '4px', border: '1px solid #d0d5dd' }}>
+          <input type="checkbox" checked={showRawCols} onChange={() => setShowRawCols(!showRawCols)} style={{ accentColor: BLUE }} />
+          Show Raw Data
+        </label>
+        <span style={{ fontSize: '10px', fontWeight: 700, color: TXT2, textTransform: 'uppercase' }}>Include:</span>
+        {meta.studies.map(s => {
+          const on = !excludedStudies.has(s.name);
           return (
-            <g key={`study-${i}`}>
-              {/* Zebra stripe */}
-              {i % 2 === 0 && <rect x={0} y={y - ROW_H / 2} width={W} height={ROW_H} fill={ZEBRA_COL} />}
-
-              {/* Study name */}
-              <text x={COL_STUDY_X} y={y + 4} fontSize="10" fill={TEXT_PRIMARY}>{s.name}</text>
-
-              {/* Weight % */}
-              <text x={COL_WT_X} y={y + 4} fontSize="10" fill={TEXT_SECONDARY}>{fmt(s.weight, 1)}%</text>
-
-              {/* ── CI whisker ── */}
-              <line x1={ciLX} y1={y} x2={ciRX} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
-
-              {/* CI end caps (or arrow if clipped) */}
-              {!clippedLeft && <line x1={ciLX} y1={y - 3.5} x2={ciLX}  y2={y + 3.5} stroke={CI_COLOR} strokeWidth="1.2" />}
-              {clippedLeft  && <>
-                <line x1={PLOT_LEFT + 5} y1={y - 3} x2={PLOT_LEFT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
-                <line x1={PLOT_LEFT + 5} y1={y + 3} x2={PLOT_LEFT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
-              </>}
-              {!clippedRight && <line x1={ciRX} y1={y - 3.5} x2={ciRX} y2={y + 3.5} stroke={CI_COLOR} strokeWidth="1.2" />}
-              {clippedRight  && <>
-                <line x1={PLOT_RIGHT - 5} y1={y - 3} x2={PLOT_RIGHT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
-                <line x1={PLOT_RIGHT - 5} y1={y + 3} x2={PLOT_RIGHT} y2={y} stroke={CI_COLOR} strokeWidth="1.2" />
-              </>}
-
-              {/* Effect size square */}
-              <rect
-                x={effectX - sqSize / 2} y={y - sqSize / 2}
-                width={sqSize} height={sqSize}
-                fill={STUDY_COLOR} opacity="0.85"
-              />
-
-              {/* ES [lower, upper] text */}
-              <text x={COL_ES_X} y={y + 4} fontSize="9.5" fill={TEXT_SECONDARY}>
-                {fmt(s.effect)} [{fmt(s.ci_lower)}, {fmt(s.ci_upper)}]
-              </text>
-            </g>
+            <label key={s.name} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: on ? TXT : '#98a2b3', cursor: 'pointer', background: on ? '#eff8ff' : '#f2f4f7', padding: '2px 6px', borderRadius: '3px', border: `1px solid ${on ? '#b2ddff' : '#e4e7ec'}` }}>
+              <input type="checkbox" checked={on} onChange={() => toggleStudy(s.name)} style={{ cursor: 'pointer', accentColor: BLUE, width: '11px', height: '11px' }} />
+              {s.name}
+            </label>
           );
         })}
-
-        {/* ═══════════════ SEPARATOR + POOLED DIAMOND ═══════════════ */}
-        {pooled && (() => {
-          const sepY = BODY_TOP + nStudies * ROW_H;
-          const dy   = BODY_TOP + (nStudies + 0.5) * ROW_H;
-          const dLeft   = Math.max(PLOT_LEFT,  toX(pooled.ci_lower));
-          const dRight  = Math.min(PLOT_RIGHT, toX(pooled.ci_upper));
-          const dCenter = toX(pooled.effect);
-          const dHalf   = 7;
-
-          return (
-            <g>
-              <line x1={0} y1={sepY + 2} x2={W} y2={sepY + 2} stroke={RULE_COL} strokeWidth="0.7" />
-
-              {/* Pooled label */}
-              <text x={COL_STUDY_X} y={dy + 4} fontSize="10" fontWeight="700" fill={TEXT_PRIMARY}>{modelLabel}</text>
-
-              {/* Diamond */}
-              <polygon
-                points={`${dLeft},${dy} ${dCenter},${dy - dHalf} ${dRight},${dy} ${dCenter},${dy + dHalf}`}
-                fill={DIAMOND_FILL} stroke={DIAMOND_STROKE} strokeWidth="0.8" strokeLinejoin="miter"
-              />
-
-              {/* Pooled ES text */}
-              <text x={COL_ES_X} y={dy + 4} fontSize="9.5" fontWeight="700" fill={DIAMOND_FILL}>
-                {fmt(pooled.effect)} [{fmt(pooled.ci_lower)}, {fmt(pooled.ci_upper)}]
-              </text>
-
-              {/* Bottom rule */}
-              <line x1={0} y1={dy + ROW_H / 2 + 2} x2={W} y2={dy + ROW_H / 2 + 2} stroke={RULE_COL} strokeWidth="0.7" />
-            </g>
-          );
-        })()}
-
-        {/* ═══════════════ X AXIS ═══════════════ */}
-        <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_RIGHT} y2={AXIS_Y} stroke={TEXT_SECONDARY} strokeWidth="0.8" />
-        {ticks.map((t, i) => {
-          const tx = toX(t);
-          const isZero = Math.abs(t) < tickStep * 0.001;
-          return (
-            <g key={`tick-${i}`}>
-              <line x1={tx} y1={AXIS_Y} x2={tx} y2={AXIS_Y + 5} stroke={TEXT_SECONDARY} strokeWidth="0.7" />
-              {/* Light gridline up through data area */}
-              {!isZero && <line x1={tx} y1={BODY_TOP} x2={tx} y2={BODY_BOTTOM} stroke={GRID_COL} strokeWidth="0.4" />}
-              <text x={tx} y={AXIS_Y + 16} textAnchor="middle" fontSize="9" fill={TEXT_MUTED}>
-                {Math.abs(t) < 0.001 ? '0' : Number.isInteger(t) ? t.toString() : fmt(t, Math.abs(t) < 1 ? 2 : 1)}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Favours labels */}
-        <text x={PLOT_LEFT + (nullX - PLOT_LEFT) / 2} y={AXIS_Y + 32} textAnchor="middle" fontSize="9" fill={TEXT_MUTED} fontStyle="italic">
-          ← Favours control
-        </text>
-        <text x={nullX + (PLOT_RIGHT - nullX) / 2} y={AXIS_Y + 32} textAnchor="middle" fontSize="9" fill={TEXT_MUTED} fontStyle="italic">
-          Favours treatment →
-        </text>
-
-        {/* ═══════════════ FOOTER: HETEROGENEITY + OVERALL TEST ═══════════════ */}
-        {hetStats && (
-          <text x={COL_STUDY_X} y={FOOTER_Y} fontSize="9" fill={TEXT_MUTED}>
-            Heterogeneity: τ² = {fmt(hetStats.tau2, 4)}; χ² = {fmt(hetStats.Q, 2)}, df = {hetStats.df} (P = {fmtP(hetStats.pValue)}); I² = {fmt(hetStats.I2, 1)}%
-          </text>
-        )}
-        {pooled && (
-          <text x={COL_STUDY_X} y={FOOTER_Y + (hetStats ? 14 : 0)} fontSize="9" fill={TEXT_MUTED}>
-            Test for overall effect: Z = {fmt(pooledZ, 2)} (P {pooledP < 0.00001 ? '< 0.00001' : `= ${fmtP(pooledP)}`})
-          </text>
-        )}
-      </svg>
+      </div>
     </div>
   );
 }

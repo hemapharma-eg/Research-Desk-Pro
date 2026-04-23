@@ -129,21 +129,17 @@ export function DataExtractorWorkspace() {
       } else if (window.api?.readFileBase64) {
         window.api.readFileBase64(pdfPath).then((res: any) => {
           if (res.success && res.base64) {
-            try {
-              const byteCharacters = atob(res.base64);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: 'application/pdf' });
-              currentBlobUrl = URL.createObjectURL(blob);
-              setPdfDataUrl(currentBlobUrl);
-            } catch (e) {
-              console.error('Failed to parse PDF binary blob:', e);
-              setPdfDataUrl(null);
-              setPdfError('Failed to decode PDF file.');
-            }
+            fetch(`data:application/pdf;base64,${res.base64}`)
+              .then(response => response.blob())
+              .then(blob => {
+                currentBlobUrl = URL.createObjectURL(blob);
+                setPdfDataUrl(currentBlobUrl);
+              })
+              .catch(e => {
+                console.error('Failed to parse PDF binary blob:', e);
+                setPdfDataUrl(null);
+                setPdfError('Failed to decode PDF file.');
+              });
           } else {
             console.error('readFileBase64 failed:', res.error);
             setPdfDataUrl(null);

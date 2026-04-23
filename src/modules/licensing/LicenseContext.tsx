@@ -58,8 +58,15 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await new Promise(r => setTimeout(r, 500));
           payload = await window.api.license.getState();
         }
-        if (payload) {
-          currentData = { deviceId: payload.deviceId, state: payload.state || defaultState, counters: payload.counters || defaultCounters };
+        if (payload && payload.state) {
+          currentData = { deviceId: payload.deviceId, state: payload.state, counters: payload.counters || defaultCounters };
+        } else {
+          // If payload is empty due to IPC timeout, preserve current state if it's already licensed
+          currentData = {
+            deviceId: state.deviceId || null,
+            state: state.mode === 'licensed_active' ? state : defaultState,
+            counters: state.counters || defaultCounters
+          };
         }
       } else {
         // Web Browser Fallback

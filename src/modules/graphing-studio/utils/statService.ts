@@ -1187,19 +1187,43 @@ export function runROCAnalysis(
 
 // ===================== Meta-Analysis (Forest Plot) =====================
 
+export type MetaAnalysisEffectMeasure = 'RR' | 'OR' | 'RD' | 'MD' | 'SMD';
+
+export interface MetaAnalysisRawData {
+  studyNames: string[];
+  // Dichotomous (events, totals)
+  eventsT?: number[];
+  totalT?: number[];
+  eventsC?: number[];
+  totalC?: number[];
+  // Continuous (mean, sd, n)
+  meanT?: number[];
+  sdT?: number[];
+  nT?: number[];
+  meanC?: number[];
+  sdC?: number[];
+  nC?: number[];
+}
+
 export interface MetaAnalysisStudy {
   name: string;
-  effectSize: number;  // e.g., SMD, logOR, mean difference
+  effectSize: number;  // The calculated effect (e.g., logOR, MD)
   se: number;          // standard error of the effect size
   ci_lower: number;
   ci_upper: number;
-  weight: number;      // will be computed
-  n?: number;
+  weight: number;      // weight percentage
+  raw?: {
+    a?: number; n1?: number; c?: number; n2?: number; // dichotomous
+    m1?: number; s1?: number; nt?: number; // continuous treat
+    m2?: number; s2?: number; nc?: number; // continuous ctrl
+  };
 }
 
 export interface MetaAnalysisResult extends StatTestResult {
+  effectMeasure: MetaAnalysisEffectMeasure;
+  dataType: 'dichotomous' | 'continuous';
   studies: MetaAnalysisStudy[];
-  pooledEffect: number;
+  pooledEffect: number; // For ratio measures, this is still log-scale
   pooledSE: number;
   pooledCI_lower: number;
   pooledCI_upper: number;
@@ -1213,41 +1237,135 @@ export interface MetaAnalysisResult extends StatTestResult {
   model: 'fixed' | 'random';
 }
 
-/**
- * Run an inverse-variance weighted meta-analysis.
- * Input: arrays of effect sizes and their standard errors, plus study labels.
- * The function computes both fixed-effect and random-effects (DL) models.
- */
+function calculateDichotomousEffects(data: MetaAnalysisRawData, measure: 'RR' | 'OR' | 'RD') {
+  const { eventsT = [], totalT = [], eventsC = [], totalC = [] } = data;
+  const effects: number[] = [];
+  const ses: number[] = [];
+
+  console.log('[META-CALC] calculateDichotomousEffects input:', { eventsT, totalT, eventsC, totalC, measure });
+  
+  for (let i = 0; i < eventsT.length; i++) {
+    let a = eventsT[i];
+    let n1 = totalT[i];
+    let c = eventsC[i];
+    let n2 = totalC[i];
+
+    // Validate inputs
+    if (isNaN(a) || isNaN(n1) || isNaN(c) || isNaN(n2) || n1 <= 0 || n2 <= 0) {
+      console.warn(`[META-CALC] Study ${i}: invalid data a=${a} n1=${n1} c=${c} n2=${n2}, skipping`);
+      effects.push(0);
+      ses.push(Infinity);
+      continue;
+    }
+    // Ensure events don't exceed totals
+    a = Math.min(a, n1);
+    c = Math.min(c, n2);
+
+    let b = n1 - a;
+    let d = n2 - c;
+
+    // Haldane-Anscombe correction if any cell is 0 for RR/OR
+    if ((measure === 'RR' || measure === 'OR') && (a === 0 || b === 0 || c === 0 || d === 0)) {
+      a += 0.5; b += 0.5; c += 0.5; d += 0.5;
+      n1 += 1.0; n2 += 1.0;
+    }
+
+    if (measure === 'RR') {
+      const pT = a / n1;
+      const pC = c / n2;
+      if (pT <= 0 || pC <= 0) { effects.push(0); ses.push(Infinity); continue; }
+      const rr = pT / pC;
+      const logRR = Math.log(rr);
+      const seLogRR = Math.sqrt(1/a - 1/n1 + 1/c - 1/n2);
+      console.log(`[META-CALC] Study ${i}: a=${a} n1=${n1} c=${c} n2=${n2} => RR=${rr.toFixed(4)} logRR=${logRR.toFixed(4)} SE=${seLogRR.toFixed(4)}`);
+      effects.push(isFinite(logRR) ? logRR : 0);
+      ses.push(isFinite(seLogRR) && seLogRR > 0 ? seLogRR : Infinity);
+    } else if (measure === 'OR') {
+      if (b <= 0 || c <= 0) { effects.push(0); ses.push(Infinity); continue; }
+      const or = (a * d) / (b * c);
+      const logOR = Math.log(or);
+      const seLogOR = Math.sqrt(1/a + 1/b + 1/c + 1/d);
+      effects.push(isFinite(logOR) ? logOR : 0);
+      ses.push(isFinite(seLogOR) && seLogOR > 0 ? seLogOR : Infinity);
+    } else if (measure === 'RD') {
+      const rd = (a / n1) - (c / n2);
+      const p1 = a / n1;
+      const p2 = c / n2;
+      const seRD = Math.sqrt((p1 * (1 - p1)) / n1 + (p2 * (1 - p2)) / n2);
+      effects.push(isFinite(rd) ? rd : 0);
+      ses.push(isFinite(seRD) && seRD > 0 ? seRD : Infinity);
+    }
+  }
+  console.log('[META-CALC] effects:', effects, 'ses:', ses);
+  return { effects, ses };
+}
+
+function calculateContinuousEffects(data: MetaAnalysisRawData, measure: 'MD' | 'SMD') {
+  const { meanT = [], sdT = [], nT = [], meanC = [], sdC = [], nC = [] } = data;
+  const effects: number[] = [];
+  const ses: number[] = [];
+
+  for (let i = 0; i < meanT.length; i++) {
+    const m1 = meanT[i], s1 = sdT[i], n1 = nT[i];
+    const m2 = meanC[i], s2 = sdC[i], n2 = nC[i];
+
+    if (measure === 'MD') {
+      effects.push(m1 - m2);
+      ses.push(Math.sqrt((s1 * s1) / n1 + (s2 * s2) / n2));
+    } else if (measure === 'SMD') {
+      // Cohen's d with Hedges' g correction (approx)
+      const pooledSd = Math.sqrt(((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / (n1 + n2 - 2));
+      const d = (m1 - m2) / pooledSd;
+      // Hedges' g correction factor J
+      const j = 1 - (3 / (4 * (n1 + n2 - 2) - 1));
+      const g = d * j;
+      effects.push(g);
+      ses.push(Math.sqrt((n1 + n2) / (n1 * n2) + (g * g) / (2 * (n1 + n2))));
+    }
+  }
+  return { effects, ses };
+}
+
 export function runMetaAnalysis(
-  studyNames: string[],
-  effectSizes: number[],
-  standardErrors: number[],
+  data: MetaAnalysisRawData,
+  measure: MetaAnalysisEffectMeasure,
   model: 'fixed' | 'random' = 'random'
 ): MetaAnalysisResult {
-  const k = studyNames.length;
+  console.log('[META] runMetaAnalysis called with:', { studyNames: data.studyNames, measure, model });
+  console.log('[META] Raw data:', JSON.stringify(data, null, 2));
+  const k = data.studyNames.length;
   if (k < 2) throw new Error('Meta-analysis requires at least 2 studies.');
-  if (effectSizes.length !== k || standardErrors.length !== k) {
-    throw new Error('Effect sizes and standard errors must have the same length as study names.');
+
+  let effectSizes: number[];
+  let standardErrors: number[];
+  let dataType: 'dichotomous' | 'continuous';
+
+  if (measure === 'RR' || measure === 'OR' || measure === 'RD') {
+    const res = calculateDichotomousEffects(data, measure);
+    effectSizes = res.effects;
+    standardErrors = res.ses;
+    dataType = 'dichotomous';
+  } else {
+    const res = calculateContinuousEffects(data, measure);
+    effectSizes = res.effects;
+    standardErrors = res.ses;
+    dataType = 'continuous';
   }
 
-  // Fixed-effect weights: w_i = 1/SE_i²
-  const wi = standardErrors.map(se => se > 0 ? 1 / (se * se) : 0);
+  // Inverse-variance weighted meta-analysis
+  // Filter out Infinity SE (invalid studies)
+  const wi = standardErrors.map(se => se > 0 && isFinite(se) && !isNaN(se) ? 1 / (se * se) : 0);
   const sumW = wi.reduce((a, b) => a + b, 0);
+  console.log('[META] effectSizes:', effectSizes, 'SE:', standardErrors, 'weights:', wi, 'sumW:', sumW);
 
-  // Fixed-effect pooled estimate
-  const thetaFE = sumW > 0
-    ? wi.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumW
-    : 0;
+  const thetaFE = sumW > 0 ? wi.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumW : 0;
 
-  // Cochran's Q for heterogeneity
   const Q = wi.reduce((acc, w, i) => acc + w * (effectSizes[i] - thetaFE) ** 2, 0);
   const df = k - 1;
   const qPValue = df > 0 ? 1 - jStat.chisquare.cdf(Q, df) : 1;
 
-  // I² statistic
   const I2 = df > 0 ? Math.max(0, ((Q - df) / Q) * 100) : 0;
 
-  // DerSimonian-Laird τ² estimator
   const sumW2 = wi.reduce((a, w) => a + w * w, 0);
   const C = sumW - sumW2 / sumW;
   let tau2 = C > 0 ? Math.max(0, (Q - df) / C) : 0;
@@ -1257,12 +1375,9 @@ export function runMetaAnalysis(
   let weights: number[];
 
   if (model === 'random' && tau2 > 0) {
-    // Random-effects weights: w*_i = 1/(SE_i² + τ²)
-    const wiStar = standardErrors.map(se => se > 0 ? 1 / (se * se + tau2) : 0);
+    const wiStar = standardErrors.map(se => se > 0 && !isNaN(se) ? 1 / (se * se + tau2) : 0);
     const sumWStar = wiStar.reduce((a, b) => a + b, 0);
-    pooledEffect = sumWStar > 0
-      ? wiStar.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumWStar
-      : 0;
+    pooledEffect = sumWStar > 0 ? wiStar.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumWStar : 0;
     pooledSE = sumWStar > 0 ? Math.sqrt(1 / sumWStar) : 0;
     weights = wiStar;
   } else {
@@ -1272,40 +1387,62 @@ export function runMetaAnalysis(
     tau2 = 0;
   }
 
-  // Normalize weights to percentages for display
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
-  // Pooled CI
   const z = pooledSE > 0 ? pooledEffect / pooledSE : 0;
   const pValue = pooledSE > 0 ? (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) * 2 : 1;
   const pooledCI_lower = pooledEffect - 1.96 * pooledSE;
   const pooledCI_upper = pooledEffect + 1.96 * pooledSE;
 
-  // Build per-study data
-  const studies: MetaAnalysisStudy[] = studyNames.map((name, i) => ({
-    name,
-    effectSize: effectSizes[i],
-    se: standardErrors[i],
-    ci_lower: effectSizes[i] - 1.96 * standardErrors[i],
-    ci_upper: effectSizes[i] + 1.96 * standardErrors[i],
-    weight: totalWeight > 0 ? (weights[i] / totalWeight) * 100 : 0,
-  }));
+  const studies: MetaAnalysisStudy[] = data.studyNames.map((name, i) => {
+    let raw;
+    if (dataType === 'dichotomous') {
+      raw = {
+        a: data.eventsT?.[i], n1: data.totalT?.[i],
+        c: data.eventsC?.[i], n2: data.totalC?.[i]
+      };
+    } else {
+      raw = {
+        m1: data.meanT?.[i], s1: data.sdT?.[i], nt: data.nT?.[i],
+        m2: data.meanC?.[i], s2: data.sdC?.[i], nc: data.nC?.[i]
+      };
+    }
+    return {
+      name,
+      effectSize: effectSizes[i],
+      se: standardErrors[i],
+      ci_lower: effectSizes[i] - 1.96 * standardErrors[i],
+      ci_upper: effectSizes[i] + 1.96 * standardErrors[i],
+      weight: totalWeight > 0 ? (weights[i] / totalWeight) * 100 : 0,
+      raw
+    };
+  });
+
+  const isRatio = measure === 'RR' || measure === 'OR';
 
   return {
-    testName: `Meta-Analysis (${model === 'random' ? 'Random-Effects, DL' : 'Fixed-Effect, IV'})`,
+    testName: `Meta-Analysis (${measure}, ${model === 'random' ? 'Random-Effects' : 'Fixed-Effect'})`,
+    effectMeasure: measure,
+    dataType,
     mainPValue: pValue,
     statisticType: 'Z',
     statisticValue: z,
     isSignificant: pValue <= 0.05,
-    descriptives: studies.map(s => ({
-      group: s.name,
-      n: 0, mean: s.effectSize, median: s.effectSize,
-      sd: s.se, variance: s.se * s.se, sem: s.se,
-      min: s.ci_lower, max: s.ci_upper, range: s.ci_upper - s.ci_lower,
-      iqr: 0, q1: s.ci_lower, q3: s.ci_upper,
-      ci95_lower: s.ci_lower, ci95_upper: s.ci_upper,
-      cv: 0, sum: 0,
-    })),
+    descriptives: studies.map(s => {
+      const effect = isRatio ? Math.exp(s.effectSize) : s.effectSize;
+      const lower = isRatio ? Math.exp(s.ci_lower) : s.ci_lower;
+      const upper = isRatio ? Math.exp(s.ci_upper) : s.ci_upper;
+      return {
+        group: s.name,
+        n: (s.raw?.n1 || s.raw?.nt || 0) + (s.raw?.n2 || s.raw?.nc || 0),
+        mean: effect, median: effect,
+        sd: s.se, variance: s.se * s.se, sem: s.se,
+        min: lower, max: upper, range: upper - lower,
+        iqr: 0, q1: lower, q3: upper,
+        ci95_lower: lower, ci95_upper: upper,
+        cv: 0, sum: 0,
+      };
+    }),
     effectSize: pooledEffect,
     effectSizeType: 'Pooled Effect',
     studies,
@@ -1316,12 +1453,84 @@ export function runMetaAnalysis(
     heterogeneity: { Q, df, pValue: qPValue, I2, tau2 },
     model,
     notes: [
+      `Measure: ${measure}`,
       `Model: ${model === 'random' ? 'Random-Effects (DerSimonian-Laird)' : 'Fixed-Effect (Inverse Variance)'}`,
-      `Pooled effect = ${pooledEffect.toFixed(4)} (95% CI: ${pooledCI_lower.toFixed(4)} to ${pooledCI_upper.toFixed(4)})`,
+      `Pooled effect (analysis scale) = ${pooledEffect.toFixed(4)} (95% CI: ${pooledCI_lower.toFixed(4)} to ${pooledCI_upper.toFixed(4)})`,
       `Z = ${z.toFixed(3)}, p = ${pValue < 0.0001 ? '< 0.0001' : pValue.toFixed(4)}`,
       `Heterogeneity: Q(${df}) = ${Q.toFixed(2)}, p = ${qPValue < 0.0001 ? '< 0.0001' : qPValue.toFixed(4)}`,
       `I² = ${I2.toFixed(1)}%, τ² = ${tau2.toFixed(4)}`,
-      `Number of studies: ${k}`,
     ],
+  };
+}
+
+export function recalculateMetaAnalysis(
+  activeStudies: MetaAnalysisStudy[],
+  model: 'fixed' | 'random' = 'random'
+) {
+  const k = activeStudies.length;
+  if (k === 0) return null;
+  if (k === 1) {
+    const s = activeStudies[0];
+    return {
+      pooledEffect: s.effectSize,
+      pooledSE: s.se,
+      pooledCI_lower: s.ci_lower,
+      pooledCI_upper: s.ci_upper,
+      heterogeneity: null,
+      z: s.se > 0 ? s.effectSize / s.se : 0,
+      pValue: s.se > 0 ? (1 - jStat.normal.cdf(Math.abs(s.effectSize / s.se), 0, 1)) * 2 : 1,
+      weights: [100]
+    };
+  }
+
+  const effectSizes = activeStudies.map(s => s.effectSize);
+  const standardErrors = activeStudies.map(s => s.se);
+
+  const wi = standardErrors.map(se => se > 0 && isFinite(se) && !isNaN(se) ? 1 / (se * se) : 0);
+  const sumW = wi.reduce((a, b) => a + b, 0);
+  const thetaFE = sumW > 0 ? wi.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumW : 0;
+
+  const Q = wi.reduce((acc, w, i) => acc + w * (effectSizes[i] - thetaFE) ** 2, 0);
+  const df = k - 1;
+  const qPValue = df > 0 ? 1 - jStat.chisquare.cdf(Q, df) : 1;
+  const I2 = df > 0 ? Math.max(0, ((Q - df) / Q) * 100) : 0;
+
+  const sumW2 = wi.reduce((a, w) => a + w * w, 0);
+  const C = sumW - sumW2 / sumW;
+  let tau2 = C > 0 ? Math.max(0, (Q - df) / C) : 0;
+
+  let pooledEffect: number;
+  let pooledSE: number;
+  let weights: number[];
+
+  if (model === 'random' && tau2 > 0) {
+    const wiStar = standardErrors.map(se => se > 0 && !isNaN(se) ? 1 / (se * se + tau2) : 0);
+    const sumWStar = wiStar.reduce((a, b) => a + b, 0);
+    pooledEffect = sumWStar > 0 ? wiStar.reduce((acc, w, i) => acc + w * effectSizes[i], 0) / sumWStar : 0;
+    pooledSE = sumWStar > 0 ? Math.sqrt(1 / sumWStar) : 0;
+    weights = wiStar;
+  } else {
+    pooledEffect = thetaFE;
+    pooledSE = sumW > 0 ? Math.sqrt(1 / sumW) : 0;
+    weights = wi;
+  }
+
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const normalizedWeights = weights.map(w => totalWeight > 0 ? (w / totalWeight) * 100 : 0);
+
+  const z = pooledSE > 0 ? pooledEffect / pooledSE : 0;
+  const pValue = pooledSE > 0 ? (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) * 2 : 1;
+  const pooledCI_lower = pooledEffect - 1.96 * pooledSE;
+  const pooledCI_upper = pooledEffect + 1.96 * pooledSE;
+
+  return {
+    pooledEffect,
+    pooledSE,
+    pooledCI_lower,
+    pooledCI_upper,
+    heterogeneity: { Q, df, pValue: qPValue, I2, tau2 },
+    z,
+    pValue,
+    weights: normalizedWeights
   };
 }

@@ -142,9 +142,24 @@ export function SystematicReviewProvider({ children }: { children: ReactNode }) 
     fetchState();
   }, []);
 
-  // Save mechanism is now completely manual to prevent enormous JSON payloads
-  // from locking the SQLite thread on every minor keystroke in references.
-  // The user triggers save explicitly via the top toolbar.
+  // Auto-save mechanism (debounced 3 seconds)
+  useEffect(() => {
+    // Skip saving if project is null (e.g. just loaded or no project active)
+    if (!state.project) return;
+    
+    const timer = setTimeout(async () => {
+      try {
+        // Strip out volatile UI state before saving if necessary, though full state is generally fine
+        const stateToSave = { ...state, isSaving: false, error: null };
+        const stateString = JSON.stringify(stateToSave);
+        await window.api.setMetadata('sr_app_state', stateString);
+      } catch (e) {
+        console.error('Auto-save failed:', e);
+      }
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [state]);
 
   const logEvent = (
     actionType: ActionType,
