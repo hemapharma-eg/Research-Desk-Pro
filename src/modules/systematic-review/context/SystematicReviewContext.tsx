@@ -132,6 +132,24 @@ export function SystematicReviewProvider({ children }: { children: ReactNode }) 
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && typeof parsed === 'object') {
+            // Migrate legacy absolute pdfPaths to relative paths for cross-platform portability
+            if (parsed.records && Array.isArray(parsed.records)) {
+              parsed.records = parsed.records.map((r: any) => {
+                if (r.pdfPath && typeof r.pdfPath === 'string' && !r.pdfPath.startsWith('blob:')) {
+                  // Check if it's an absolute path (starts with / or drive letter like C:\)
+                  const isAbsolute = r.pdfPath.startsWith('/') || /^[A-Za-z]:[/\\]/.test(r.pdfPath);
+                  if (isAbsolute) {
+                    // Extract the relative portion after 'pdfs/' or 'pdfs\' in the path
+                    const pdfsIndex = r.pdfPath.replace(/\\/g, '/').lastIndexOf('pdfs/');
+                    if (pdfsIndex !== -1) {
+                      const relativePath = r.pdfPath.substring(pdfsIndex).replace(/\\/g, '/');
+                      return { ...r, pdfPath: relativePath };
+                    }
+                  }
+                }
+                return r;
+              });
+            }
             dispatch({ type: 'LOAD_STATE', payload: parsed });
           }
         }

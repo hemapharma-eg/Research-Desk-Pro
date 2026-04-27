@@ -97,6 +97,7 @@ export interface ElectronAPI {
   closeProject: () => Promise<{ success: boolean }>;
   getCurrentProject: () => Promise<{ success: boolean; path?: string | null }>;
   readFileBase64: (filePath: string) => Promise<{ success: boolean; base64?: string; error?: string }>;
+  resolvePdfPath: (storedPath: string) => Promise<{ success: boolean; resolvedPath?: string; migratedRelativePath?: string; error?: string }>;
   
   getReferences: () => Promise<{ success: boolean; data?: Reference[]; error?: string }>;
   createReference: (refData: Omit<Reference, 'id'>) => Promise<{ success: boolean; data?: Reference; error?: string }>;

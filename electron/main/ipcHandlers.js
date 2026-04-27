@@ -124,7 +124,9 @@ ipcMain.handle('file:copyPdfToProject', async (event, sourcePath) => {
     const uniqueName = `${baseName}_${Date.now()}${ext}`;
     const destPath = path.join(pdfsDir, uniqueName);
     fs.copyFileSync(sourcePath, destPath);
-    return { success: true, destPath };
+    // Return RELATIVE path for cross-platform portability
+    const relativePath = path.join('pdfs', uniqueName);
+    return { success: true, destPath: relativePath, newPath: relativePath };
   } catch (error) {
     console.error('Failed to copy PDF to project:', error);
     return { success: false, error: String(error) };
@@ -149,6 +151,45 @@ ipcMain.handle('file:readBase64', async (event, filePath) => {
     return { success: true, base64: buffer.toString('base64') };
   } catch (error) {
     console.error('Failed to read file:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+// Resolve a stored PDF path (relative or legacy absolute) to a valid absolute path on this machine
+ipcMain.handle('file:resolvePdfPath', async (event, storedPath) => {
+  try {
+    const projectPath = dbManager.getProjectPath();
+    if (!projectPath || !storedPath) {
+      return { success: false, error: 'No project path or stored path provided.' };
+    }
+
+    // Skip blob: URLs — these are in-session browser objects
+    if (storedPath.startsWith('blob:')) {
+      return { success: true, resolvedPath: storedPath };
+    }
+
+    // 1. If it's already a valid absolute path on this machine, use it directly
+    if (path.isAbsolute(storedPath) && fs.existsSync(storedPath)) {
+      return { success: true, resolvedPath: storedPath };
+    }
+
+    // 2. Try resolving as relative to the project directory
+    const resolvedRelative = path.join(projectPath, storedPath);
+    if (fs.existsSync(resolvedRelative)) {
+      return { success: true, resolvedPath: resolvedRelative };
+    }
+
+    // 3. Legacy migration: extract filename and look in the project's pdfs/ folder
+    const fileName = path.basename(storedPath);
+    const fallbackPath = path.join(projectPath, 'pdfs', fileName);
+    if (fs.existsSync(fallbackPath)) {
+      const migratedRelativePath = path.join('pdfs', fileName);
+      return { success: true, resolvedPath: fallbackPath, migratedRelativePath };
+    }
+
+    return { success: false, error: 'PDF file not found at any expected location.' };
+  } catch (error) {
+    console.error('Failed to resolve PDF path:', error);
     return { success: false, error: String(error) };
   }
 });
@@ -882,11 +923,12 @@ ipcMain.handle('systematic:autoFetchPDFs', async (event, refs, email) => {
           }
           
           const buffer = await pdfRes.arrayBuffer();
-          const filePath = path.join(pdfsDir, `${ref.id}.pdf`);
-          fs.writeFileSync(filePath, Buffer.from(buffer));
+          const relativePath = path.join('pdfs', `${ref.id}.pdf`);
+          const absolutePath = path.join(pdfsDir, `${ref.id}.pdf`);
+          fs.writeFileSync(absolutePath, Buffer.from(buffer));
           
-          try { dbManager.updateReference(ref.id, { pdf_path: filePath }); } catch(e) {}
-          successfulFetches.push({ id: ref.id, pdfPath: filePath });
+          try { dbManager.updateReference(ref.id, { pdf_path: relativePath }); } catch(e) {}
+          successfulFetches.push({ id: ref.id, pdfPath: relativePath });
           successCount++;
         } else {
           failedCount++;

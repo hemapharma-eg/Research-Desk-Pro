@@ -120,6 +120,8 @@ If the application malfunctions, reference the immediate solutions below to rest
 ## 🔄 Recent Changes
 
 <!-- CHANGELOG_START -->
+- 55b66f6: chore: sync state to mirror antigravity project
+- cfcfddc: Meta-Analysis engine overhaul & Forest Plot publication-grade upgrade
 - d5e6b1c: Fix license persistence, SR PDF rendering, and Send to Extractor workflow
 - 4bc1faf: chore: upgrade gatekeeper installer license layout from plaintext to professionally styled RTF document
 - 439c9ee: chore: untrack dist-electron build artifacts and ignore scratch folders to mirror antigravity cleanly
@@ -128,6 +130,4 @@ If the application malfunctions, reference the immediate solutions below to rest
 - 4fceb64: feat: implement dynamic documentation-as-code generator for user manuals
 - 3b258ea: fix: remove invalid license property from package.json since electron-builder auto-detects build/license.txt
 - b9e8950: chore: add legal documentation and update installer configs for EULA acceptance
-- a23eee1: fix(document-editor): dynamic citation sequence numbering
-- c22f435: Fix graph assembler preview placeholder issue
 <!-- CHANGELOG_END -->

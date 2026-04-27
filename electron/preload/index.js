@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Utilities
   readFileBase64: (filePath) => ipcRenderer.invoke('file:readBase64', filePath),
+  resolvePdfPath: (storedPath) => ipcRenderer.invoke('file:resolvePdfPath', storedPath),
   copyPdfToProject: (sourcePath) => ipcRenderer.invoke('file:copyPdfToProject', sourcePath),
 
   // Systematic Review

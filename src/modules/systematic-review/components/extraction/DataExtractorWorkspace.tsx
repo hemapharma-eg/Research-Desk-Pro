@@ -126,29 +126,45 @@ export function DataExtractorWorkspace() {
       if (pdfPath.startsWith('blob:')) {
         // In-session blob URL (browser fallback)
         setPdfDataUrl(pdfPath);
-      } else if (window.api?.readFileBase64) {
-        window.api.readFileBase64(pdfPath).then((res: any) => {
-          if (res.success && res.base64) {
-            fetch(`data:application/pdf;base64,${res.base64}`)
-              .then(response => response.blob())
-              .then(blob => {
-                currentBlobUrl = URL.createObjectURL(blob);
-                setPdfDataUrl(currentBlobUrl);
-              })
-              .catch(e => {
-                console.error('Failed to parse PDF binary blob:', e);
-                setPdfDataUrl(null);
-                setPdfError('Failed to decode PDF file.');
-              });
-          } else {
-            console.error('readFileBase64 failed:', res.error);
+      } else if (window.api?.resolvePdfPath) {
+        // Resolve stored path (relative or legacy absolute) to absolute on this machine
+        window.api.resolvePdfPath(pdfPath).then((resolveRes: any) => {
+          if (!resolveRes.success || !resolveRes.resolvedPath) {
+            console.error('PDF path resolution failed:', resolveRes.error);
             setPdfDataUrl(null);
-            setPdfError('Could not read PDF file. It may have been moved or deleted.');
+            setPdfError('Could not find the PDF file. It may have been moved or deleted.');
+            return;
           }
+
+          const absolutePath = resolveRes.resolvedPath;
+
+          window.api.readFileBase64(absolutePath).then((res: any) => {
+            if (res.success && res.base64) {
+              fetch(`data:application/pdf;base64,${res.base64}`)
+                .then(response => response.blob())
+                .then(blob => {
+                  currentBlobUrl = URL.createObjectURL(blob);
+                  setPdfDataUrl(currentBlobUrl);
+                })
+                .catch(e => {
+                  console.error('Failed to parse PDF binary blob:', e);
+                  setPdfDataUrl(null);
+                  setPdfError('Failed to decode PDF file.');
+                });
+            } else {
+              console.error('readFileBase64 failed:', res.error);
+              setPdfDataUrl(null);
+              setPdfError('Could not read PDF file. It may have been moved or deleted.');
+            }
+          }).catch((err: any) => {
+            console.error('Failed invoking readFileBase64:', err);
+            setPdfDataUrl(null);
+            setPdfError('Failed to load PDF file.');
+          });
         }).catch((err: any) => {
-          console.error('Failed invoking readFileBase64:', err);
+          console.error('Failed invoking resolvePdfPath:', err);
           setPdfDataUrl(null);
-          setPdfError('Failed to load PDF file.');
+          setPdfError('Failed to resolve PDF file path.');
         });
       } else {
         setPdfDataUrl(null);

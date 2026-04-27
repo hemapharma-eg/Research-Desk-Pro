@@ -34,29 +34,53 @@ export function FullTextScreeningWorkspace() {
 
       if (activeRecord.pdfPath.startsWith('blob:')) {
         setPdfDataUrl(activeRecord.pdfPath);
-      } else if (window.api?.readFileBase64) {
-        window.api.readFileBase64(activeRecord.pdfPath).then((res: any) => {
-          if (res.success && res.base64) {
-            fetch(`data:application/pdf;base64,${res.base64}`)
-              .then(response => response.blob())
-              .then(blob => {
-                currentBlobUrl = URL.createObjectURL(blob);
-                setPdfDataUrl(currentBlobUrl);
-              })
-              .catch(e => {
-                console.error('Failed to parse PDF binary blob:', e);
-                setPdfDataUrl(null);
-                setPdfLoadError('Failed to decode the PDF file.');
-              });
-          } else {
-            console.error(res.error);
+      } else if (window.api?.resolvePdfPath) {
+        // Resolve the stored path (relative or legacy absolute) to an absolute path on this machine
+        window.api.resolvePdfPath(activeRecord.pdfPath).then((resolveRes: any) => {
+          if (!resolveRes.success || !resolveRes.resolvedPath) {
+            console.error('PDF path resolution failed:', resolveRes.error);
             setPdfDataUrl(null);
-            setPdfLoadError('Could not read PDF file. It may have been moved or deleted.');
+            setPdfLoadError('Could not find the PDF file. It may have been moved or deleted.');
+            return;
           }
+
+          const absolutePath = resolveRes.resolvedPath;
+
+          // Auto-migrate legacy absolute paths to relative format
+          if (resolveRes.migratedRelativePath && activeRecord.pdfPath !== resolveRes.migratedRelativePath) {
+            dispatch({
+              type: 'UPDATE_RECORD',
+              payload: { id: activeRecord.id, updates: { pdfPath: resolveRes.migratedRelativePath } }
+            });
+          }
+
+          window.api.readFileBase64(absolutePath).then((res: any) => {
+            if (res.success && res.base64) {
+              fetch(`data:application/pdf;base64,${res.base64}`)
+                .then(response => response.blob())
+                .then(blob => {
+                  currentBlobUrl = URL.createObjectURL(blob);
+                  setPdfDataUrl(currentBlobUrl);
+                })
+                .catch(e => {
+                  console.error('Failed to parse PDF binary blob:', e);
+                  setPdfDataUrl(null);
+                  setPdfLoadError('Failed to decode the PDF file.');
+                });
+            } else {
+              console.error(res.error);
+              setPdfDataUrl(null);
+              setPdfLoadError('Could not read PDF file. It may have been moved or deleted.');
+            }
+          }).catch((err: any) => {
+            console.error('Failed invoking readFileBase64:', err);
+            setPdfDataUrl(null);
+            setPdfLoadError('Failed to load the PDF file.');
+          });
         }).catch((err: any) => {
-          console.error('Failed invoking readFileBase64:', err);
+          console.error('Failed invoking resolvePdfPath:', err);
           setPdfDataUrl(null);
-          setPdfLoadError('Failed to load the PDF file.');
+          setPdfLoadError('Failed to resolve the PDF file path.');
         });
       } else {
         setPdfDataUrl(null);

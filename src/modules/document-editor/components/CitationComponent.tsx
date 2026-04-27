@@ -33,6 +33,7 @@ export function CitationComponent(props: NodeViewProps) {
   const [allRefs, setAllRefs] = useState<Reference[]>([]);
   const [activeStyle, setActiveStyle] = useState(getCitationStyle());
   const containerRef = useRef<HTMLSpanElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [tick, setTick] = useState(0);
 
   const ids = node.attrs.id ? node.attrs.id.split(',') : [];
@@ -51,6 +52,21 @@ export function CitationComponent(props: NodeViewProps) {
     });
     return unsub;
   }, []);
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!showPicker) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        pickerRef.current && !pickerRef.current.contains(e.target as Node) &&
+        containerRef.current && !containerRef.current.contains(e.target as Node)
+      ) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPicker]);
 
   // Listen to ALL editor transactions to re-compute numbering.
   // This is the key fix: we don't rely on node.attrs being updated by a plugin.
@@ -192,6 +208,7 @@ export function CitationComponent(props: NodeViewProps) {
 
       {showPicker && (
         <div
+          ref={pickerRef}
           contentEditable={false}
           style={{
             position: 'absolute',
